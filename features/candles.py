@@ -1,4 +1,17 @@
-"""Cat 8 — Price Action / Candle (9 features)."""
+"""Cat 8 — Price Action / Candle (9 features).
+
+v2.0 verification (2026-04-27, Decision v2.37 audit + v2.38 pilot):
+    Math is timeframe-agnostic OHLC pattern recognition (body %, wicks,
+    consecutive runs, engulfing, pin bar). Per Project Spec 30min §7.2 Cat 8
+    "9 → 9, unchanged" — no parameter changes from v1.0 required for 30m.
+    30m candles carry MORE signal than 5m (less microstructure noise),
+    so the existing pattern thresholds are preserved.
+
+    Reviewed by local-Claude pre-Phase-1.10 audit; no edits to function
+    bodies needed. This docstring update is the workflow pilot per
+    Decision v2.38 — exercises the local-edit → user-pull → VPS-validate
+    cycle on a no-logic-change file.
+"""
 from __future__ import annotations
 
 import numpy as np
