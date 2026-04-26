@@ -169,7 +169,7 @@ Per §6.1, §6.3, §6.4:
 
   - Fetcher downloads ONLY 30m OHLCV, 4 assets, 3+ years.
   - 4H bars: aggregated at feature-build time:
-      df_4h = df_30m.resample("4H", on="timestamp",
+      df_4h = df_30m.resample("4h", on="timestamp",
                                label="left", closed="left").agg({
           "open": "first", "high": "max", "low": "min",
           "close": "last", "volume": "sum"
