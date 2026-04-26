@@ -446,7 +446,7 @@ Per research §3.5, upgrade from single daily VWAP to multi-anchor architecture.
 
 #### Category 6 — S/R Structure (Pivot Fibonacci + Swing Fib Retracements) (13 → 30 features)
 
-Keep all v1.0 daily-pivot features, **add weekly-pivot features** (the current `pivots.py` already has `weekly_pivot_features()` — promote it to Phase 1 inclusion), **add swing-based Fibonacci retracement features** (new — neither v1.0 nor the original v2.0 draft had these), and **add ATR-normalized + continuous-position + confluence encodings** per TradingView AI consultation (§18).
+Keep all v1.0 daily-pivot features, **add weekly-pivot features** (the current `pivots.py` already has `weekly_pivot_features()` — promote it to Phase 1 inclusion), **add swing-based Fibonacci retracement features** (new — neither v1.0 nor the original v2.0 draft had these), and **add ATR-normalized + continuous-position + confluence encodings** per TradingView AI consultation (§19).
 
 **6.1 Daily Fib-pivots (9, kept):**
 - 7 pivot levels (S3/S2/S1/P/R1/R2/R3) as % distance from close, distance to nearest, nearest pivot type, zone (0–5), approach direction, approach speed, times tested today (9)
@@ -716,7 +716,7 @@ Feature matrix (rows=30m bars, cols=~190)
 
 ### 7.5 Feature stability taxonomy (intrabar-safe vs dynamic)
 
-Every feature is tagged `static` or `dynamic` in the feature catalog. This is free to document now and pays off in Phase 4 when intrabar inference is considered (per TradingView AI consultation, §18 Report 3).
+Every feature is tagged `static` or `dynamic` in the feature catalog. This is free to document now and pays off in Phase 4 when intrabar inference is considered (per TradingView AI consultation, §19 Report 3).
 
 **`static` — stable within a 30m bar, safe to use for intrabar inference on 5m/1m without recomputation:**
 - Cat 6 all pivots (Fib-pivots and weekly pivots) — fixed for the day/week
@@ -910,7 +910,7 @@ Two cheap sanity checks **before** the full walk-forward + Optuna + SHAP pipelin
 
 #### 10.3.1 Pre-gate: ultra-minimal 5-feature baseline
 
-Per TradingView AI consultation (§18 Report 1), if a tiny hand-picked feature set cannot beat the empirical prior, the signal space is noise-dominated and adding 195 more features will not rescue it. Fast fail.
+Per TradingView AI consultation (§19 Report 1), if a tiny hand-picked feature set cannot beat the empirical prior, the signal space is noise-dominated and adding 195 more features will not rescue it. Fast fail.
 
 **Features (exactly 5):**
 1. `close_vs_ema21_pct` — price deviation from 20–21 EMA
@@ -1048,6 +1048,20 @@ Exception: trivial non-design actions (reading a file, answering a question, exp
 - **Expensive to skip:** a single OOT-contaminating iteration can compromise the entire project; v1.0 proved this at a cost of ~3 weeks.
 - **Resilient to future Claude versions:** this section is self-contained and instructs any agent that reads the spec.
 
+#### 10.5.9 Anti-patterns from peer projects (do not import)
+
+Source: deep analysis 2026-04-26 of intelligent-trading-bot, freqtrade/FreqAI, microsoft/qlib, pybroker, jesse, FinRL, TensorTrade. Many of these projects have battle-tested patterns we *do* import (see PROJECT_LOG entry 2026-04-26 + Decision Log v2.32). The following patterns from those same projects, however, would silently violate §10.5 and **must not be adopted under any circumstance** — even if a future agent argues they are "best practice in the field":
+
+1. **Continuous clock-driven retrain** (FreqAI's `live_retrain_hours`). Continuous retrain on live data silently mutates the frozen model and erases the OOT result. Phase 5 retrains in this project are explicitly **scheduled (90-day) or triggered (red metric)** per §17.3 — never clock-driven.
+2. **Threshold/HP grid search applied across the OOT range** (intelligent-trading-bot's `simulate_model.grid` if `data_end` extends into OOT; pybroker's `walkforward()` if windows span the held-out month). Threshold tuning is permitted on Phase 1–2 train + WF data only. **OOT is one shot, period.**
+3. **Online auto-rolling models** (qlib's `OnlineManagerR`, similar mechanisms in freqtrade). Automated rolling = automated drift; defeats §10.5.4 freeze gates entirely.
+4. **Auto-PCA dimensionality reduction** (FreqAI's `principal_component_analysis: true`). PCA destroys per-feature SHAP attribution, breaks the static/dynamic taxonomy needed for Phase 4 intrabar safety, and prevents leak audit. Our trim is SHAP TreeExplainer (interpretable) — **never PCA**.
+5. **Two-binary-heads label combine** (intelligent-trading-bot's `gen_labels_highlow.highlow2` then `combine: "difference"`). Our triple-barrier 3-class label correctly represents the "neither hit, time-out" case as NEUTRAL; the two-head pattern collapses this into a low-magnitude false signal. Importing it is a regression.
+6. **Flat-dict LightGBM training without valid_set / early_stopping / class_weight** (intelligent-trading-bot's `classifier_gb.py`). Our Optuna TPE + MedianPruner + Platt calibration pipeline is non-negotiable; the flat-dict pattern silently overfits on minority-class assets like TAO.
+7. **"Quant model zoo" temptation** (qlib offers TRA, KRNN, HIST, ADARNN, Tabnet, Transformer-based, etc.). Solo-developer maintenance budget cannot support a model zoo. **LightGBM is the spec.** Model swaps are v3.0-only (§17.9.2), gated by spec re-architecture, not exploration.
+
+If any future agent (or human collaborator, including me-on-a-bad-day) proposes one of these patterns citing "the FreqAI docs say…" or "qlib does it that way…" — the answer is reject by reference to this section. Their use case is different from ours; their freedom to mutate is different from our discipline.
+
 ---
 
 ## 11. Backtesting
@@ -1086,7 +1100,7 @@ Exception: trivial non-design actions (reading a file, answering a question, exp
 
 ### 12.2 Phase 3 option: hybrid 30m bias + 5m execution — "Triple-Trigger" method
 
-Only after 30m model clears paper trading. Architecture per TradingView AI consultation (§18 Report 3):
+Only after 30m model clears paper trading. Architecture per TradingView AI consultation (§19 Report 3):
 
 ```
   Trigger 1 — ML 30m directional bias (runs at every 30m close)
@@ -1289,6 +1303,29 @@ ml-bot-30m/
 - OOT log-loss within 10% of mean val log-loss (accept deterioration but not collapse)
 - OOT fire rate in [1%, 10%] range
 - OOT hit rate ≥50%
+- **BCa bootstrap 95% confidence intervals** computed for OOT Sharpe, hit-rate, and net P&L (per §16.3.1 below). Required for OOT pass.
+
+#### 16.3.1 BCa bootstrap confidence intervals (the only stat-test compatible with §10.5)
+
+Adopted from pybroker's `eval.py:bca_boot_conf` per Decision Log v2.32 / DR-A4. Justification: with the OOT one-shot rule (§10.1, §10.2), point estimates are interpretively fragile — a single Sharpe of 0.95 vs 1.05 means nothing without a confidence interval. **Bootstrap CIs strengthen §10.5, not weaken it:** they require zero additional data and zero re-tuning; they only re-sample the OOT trade list to bound where the true metric likely lies.
+
+**Procedure** (executed exactly once, immediately after OOT score):
+
+1. Run frozen model over OOT, produce trade list `T = [trade_1, …, trade_n]` with realized P&L per trade
+2. Bootstrap: draw `B = 10,000` resamples of size `n` with replacement from `T`
+3. For each resample, compute Sharpe, hit-rate, net P&L
+4. Compute **bias-corrected and accelerated (BCa)** 95% CI per Efron 1987 (handles skewed return distributions correctly; symmetric percentile is insufficient for trade returns)
+5. Report: point estimate + BCa 95% CI lower / upper bound for each metric
+
+**Pass criterion update:**
+
+- OOT Sharpe **BCa lower bound ≥ 0** (point estimate insufficient — lower bound being negative means the OOT result is plausibly noise)
+- OOT hit-rate **BCa lower bound ≥ 0.50**
+- OOT net P&L **BCa lower bound ≥ 0**
+
+If the point estimate passes but the BCa lower bound fails → **OOT fails**. The model goes to paper trading anyway (per §10.4) but cannot proceed to real capital (§16.5) without paper-trade confirmation.
+
+**No bootstrap on training/WF data** (CIs there are vanity metrics and tempt re-tuning). BCa is OOT- and Phase-5-only.
 
 ### 16.4 Phase 3 (2-week paper trading)
 
@@ -1305,7 +1342,226 @@ ml-bot-30m/
 
 ---
 
-## 17. Decision Log
+## 17. Alpha Decay & Regime Adaptation Plan
+
+### 17.1 Premise — why this section exists
+
+Crypto perp markets in 2026 have AI-driven flow estimated at >50% of taker volume (institutional desks plus retail bots running open-source LightGBM/PyTorch stacks). Edge half-life on classical TA signals is now in months, not years. Any model trained today **will** degrade — the only question is whether degradation is detected and adapted to, or silently bleeds capital.
+
+This section is the **decay-aware operational plan**. Phases 1–3 build v2.0; this plan governs what happens **after** Phase 3 goes live, plus what triggers re-architecture into v3.0.
+
+**v2.0 design choices that already buy partial resilience:**
+
+- HTF context features (4H BB, 4H RSI, weekly pivots) — less crowded than 5m RSI signals
+- Multi-anchor VWAP, swing Fib retracements, confluence flags — structural patterns adversaries can't trivially front-run
+- Symmetric labels, walk-forward, one-shot OOT — minimizes overfit-to-noise that decays fastest
+- Asset choice (SOL/LINK/TAO over BTC/ETH only) — long-tail alts have less algo penetration
+
+These reduce decay rate but do **not** eliminate it. Plan assumes **3–6 month effective edge half-life** and operates accordingly.
+
+**Scope boundary:** §17 does not modify Phase 1–3 work. v2.0 is built per current spec. §17 activates at Phase 3.5 (paper trading) and governs all subsequent operations.
+
+---
+
+### 17.2 Decay monitoring — live metrics
+
+Active continuously after Phase 3 paper-trading start. Each metric has yellow / red bands. **Yellow** triggers a diagnostic entry in `PROJECT_LOG.md`; **red** triggers §17.3 retraining or §17.7 kill switch.
+
+| Metric                                   | Window  | Yellow                       | Red                                  |
+| ---------------------------------------- | ------- | ---------------------------- | ------------------------------------ |
+| Rolling hit rate (P>0.65 fires)          | 4 wk    | < backtest mean − 5 pp       | < 50% absolute                       |
+| Rolling net P&L vs backtest baseline     | 4 wk    | −20% relative                | −40% relative                        |
+| Brier score (probability calibration)    | 4 wk    | +15% vs frozen baseline      | +30% vs frozen baseline              |
+| Feature PSI (per top-10 SHAP feature)    | 1 wk    | PSI > 0.10                   | PSI > 0.25                           |
+| SHAP top-20 turnover                     | monthly | 3+ features drop out         | 5+ features drop out                 |
+| Realized slippage vs backtest assumption | 2 wk    | 1.5× assumed                 | 2.0× assumed (= crowding signal)     |
+| Trade frequency vs backtest              | 2 wk    | ±50%                         | ±100%                                |
+
+Concrete thresholds tuned in **Phase 3.5** against paper-trade variance — values above are starting points.
+
+Implementation: `monitoring/decay_monitor.py` runs nightly cron, writes metrics to `decay_metrics_30m` Postgres table, posts yellow/red alerts to `PROJECT_LOG.md` with timestamp.
+
+**BCa bootstrap CIs in maintenance** (per §16.3.1 / Decision Log v2.32): each rolling 4-week window produces point estimates *and* BCa 95% CIs for Sharpe, hit-rate, P&L. **Yellow/red bands are evaluated against the lower CI bound, not the point estimate.** Reason: a noisy 4-week point estimate that drifts into yellow is often a sampling artifact, not real decay; only when the lower CI bound crosses the threshold has the underlying metric materially shifted. This avoids "false-alarm retrains" that would themselves degrade the model.
+
+---
+
+### 17.3 Refresh cadence — scheduled and triggered
+
+**Scheduled retraining:** every **90 days** regardless of metrics.
+
+**Triggered retraining:** on any red metric in §17.2 sustained ≥3 days, OR quarterly anniversary, whichever comes first.
+
+**Retrain process** (each retrain is a full mini-Phase, not a tweak):
+
+1. Roll training window forward by 1 month (oldest month falls off; newest month becomes new OOT)
+2. Re-run Phase 1.12 → 2.10 (relabel → walk-forward → tune → SHAP → freeze → one-shot OOT)
+3. Each retrain is its own freeze + one-shot OOT — **no iteration**, same discipline as v2.0 initial training
+4. New model promoted to live only if Phase 2 success criteria pass on the new OOT
+5. Old model archived to `models/v2.x_archive/`, not deleted; rollback path always available
+
+**Critical:** retraining is not "fitting until it works." If the new OOT fails Phase 2 criteria, the live model **continues with degraded performance OR is shut down (§17.7)** — it does **not** get re-tuned. Re-tuning into the new OOT is the v1.0 failure pattern, and it remains banned in maintenance.
+
+---
+
+### 17.4 Strategy diversification roadmap
+
+Single-model dependence is fragile. Roadmap diversifies edge sources so any one decay path doesn't kill total P&L.
+
+| Version | Addition                                            | Rationale                                                                         |
+| ------- | --------------------------------------------------- | --------------------------------------------------------------------------------- |
+| v2.0    | Single 30m 3-class model (current scope)            | Baseline                                                                          |
+| v2.1    | LONG-only and SHORT-only specialists (ensemble vote) | Class imbalance; specialists often outperform unified model on minority class    |
+| v2.2    | Mean-reversion model (return-to-VWAP/POC labels)    | Orthogonal label scheme; uncorrelated decay path from momentum model              |
+| v3.0    | Multi-timeframe ensemble (15m + 30m + 4H)           | Regime-aware weighting; longer-TF edge decays slower than HFT-scale signals       |
+| v4.0    | Regime-aware model selector (§17.5)                 | Per-regime specialists chosen by live regime classifier                           |
+
+Each version is a distinct project with its own freeze + OOT discipline. v2.1+ are post-§17.9 lifecycle decisions, not auto-launched.
+
+---
+
+### 17.5 Regime adaptation
+
+**v2.0 (current):** regime features (ATR percentile, trend strength, BB width) are passive ML inputs. Model learns regime-dependent behavior implicitly.
+
+**v2.5 (planned):** explicit regime classifier (HMM or threshold-based on 1D ATR percentile + trend strength + BB squeeze). Outputs categorical {trending-bull, trending-bear, ranging-low-vol, ranging-high-vol}. Per-regime specialist models trained separately. Live regime classification gates which model fires.
+
+**Why regime-aware matters more in AI-saturated markets:** AI flow concentrates around regime boundaries (breakouts, reversals); static models trained across regimes underweight transitions. Per-regime specialists reduce the "average across regimes" dilution.
+
+---
+
+### 17.6 Adversarial-AI considerations
+
+**Crowding detection:**
+
+- Monitor order-book stuffing / cancel-rate in 100 ms post-signal window. Spike above baseline = competitor algos read same signal.
+- If crowding score sustained above threshold on an asset, that asset is "burnt out" → reduce allocation or rotate to less-crowded venue
+
+**Less-crowded venues / assets:**
+
+- SOL / LINK / TAO already chosen partly for this rationale
+- Hyperliquid HYPE token (Phase 4): native perp, less institutional algo presence than BTC/ETH/SOL
+- Altcoins with <$500M cap (research): possible Phase 5 expansion if liquidity supports
+
+**Orthogonal feature classes (slower for HFT desks to operationalize):**
+
+- On-chain flow (whale wallets, exchange netflow, dormant supply waking)
+- Funding rate extremes + open interest divergence
+- News / event embeddings (LLM-flavored, requires Phase 4 data infra)
+- Cross-market spread (crypto-equity ETF flow, BTC-ETH ratio extremes)
+
+These classes require non-OHLCV pipelines that most HFT desks don't have. **Phase 4 priority: incorporate ≥1 orthogonal feature class** as decay insurance.
+
+---
+
+### 17.7 Kill switches & circuit breakers (live)
+
+Hard halts to live trading **without human approval required**. Halt = paper mode (predictor + executor continue running but submit no real orders). User must explicitly re-enable after diagnostic.
+
+| Trigger                                              | Action                              |
+| ---------------------------------------------------- | ----------------------------------- |
+| 7-day drawdown > 8% of capital                       | Halt → paper mode                   |
+| 3 consecutive days of red metrics from §17.2         | Halt → paper mode                   |
+| Single trade loss > 2× planned stop (slippage event) | Halt → paper mode + diagnostic      |
+| Bar-close-to-order latency > 5s for 3 bars in row    | Halt → paper mode (pipeline broken) |
+| Predictor service crash > 2 in 24 h                  | Halt → paper mode                   |
+| Daily loss > 4% of capital (intraday)                | Halt for 24 h                       |
+
+Every halt event auto-logs to `PROJECT_LOG.md` with the trigger and capital state.
+
+Thresholds tunable in **Phase 3.5** — listed values are starting points, calibrated from paper-trade variance.
+
+---
+
+### 17.8 Continuous research pipeline
+
+**Monthly:**
+
+- Scan arxiv (cs.LG, q-fin.TR, q-fin.ST) for new techniques relevant to the project
+- Scan top-25 GitHub algo-trading repos for emerging patterns
+- One-page summary appended to `research/monthly_YYYY-MM.md`
+
+**Quarterly (champion / challenger):**
+
+- Any new strategy idea enters as **challenger** model in shadow mode (4 weeks)
+- Compared on identical OOT methodology vs current champion
+- Promotion only after surviving full Phase 2 freeze gate
+- **No swap based on intuition or single-period outperformance**
+
+**Bi-annually (assumption audit):**
+
+- Re-validate that 30m is the optimal primary timeframe vs current AI-penetration level
+- Re-evaluate asset universe (SOL/LINK/TAO + HYPE) — drop assets that no longer show edge, add new candidates
+- Update §17.2 thresholds if calibration drifted
+
+---
+
+### 17.9 Project lifespan, timeframe fallback & v3.0 trigger criteria
+
+**Planned operational lifetime of v2.x architecture: 18–24 months** before structural redesign.
+
+#### 17.9.1 Timeframe fallback policy
+
+The 30m primary timeframe is research-validated (Decision Log v2.31). It is **not infinitely defended** — if 30m fails on quantitative criteria, the **only allowed fallback is 1H**. **15m is permanently rejected** for the duration of the v2.x lifecycle and may not be tried even if 30m and 1H both fail (institutional HFT/MM competition makes it unwinnable for an individual developer).
+
+**Switch-to-1H triggers** (any one sustained for the listed period):
+
+| Trigger                                                         | Sustained period       | Rationale                                                                         |
+| --------------------------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------- |
+| Phase 2 walk-forward AUC < 0.54 on BTC                          | full 14-fold WF        | Below Keller's published live benchmark (0.58); signal too weak at 30m            |
+| Post-cost Sharpe < 0.7 in Phase 3 paper trading                  | 6 months continuous    | Same Keller anchor; 30m no longer fee-economic vs alpha captured                  |
+| Post-SHAP feature count drops below 150                          | after Phase 2.6 trim   | 1H sample-size constraint relaxes; 1H now strictly superior on SNR + half-life    |
+| Realized slippage > 3× backtest assumption                       | 1 month continuous     | Crowding has eaten the 30m spread — 1H less crowded, higher captured ATR per cost |
+
+**Switch-to-1H process** (NOT a tweak — full mini-Phase, same discipline as initial training):
+
+1. Submit Deviation Request citing which 17.9.1 trigger fired with metric data
+2. Update spec's "primary timeframe" parameter (config + §6.4 aggregation factors)
+3. **Discard all v2.0 30m frozen artifacts** — feature matrix, labels, model, OOT score. They were trained on a different bar distribution
+4. Re-execute Phase 1 and Phase 2 from scratch on 1H bars (1H aggregated from 30m via `resample("1H", …)` if 30m data was kept; otherwise refetch native 1H)
+5. New 1H model gets its own one-shot OOT, same discipline
+6. Old 30m artifacts archived to `models/v2.0_30m_archive/`, never resurrected
+
+**No half-switches** — running both 30m and 1H in parallel during transition is prohibited (it's the v1.0 contamination pattern in disguise).
+
+#### 17.9.2 v3.0 re-architecture triggers
+
+Distinct from §17.9.1 (which is a timeframe pivot, not architectural change). Triggers for full v3.0 redesign:
+
+- 2+ consecutive quarterly retrains fail Phase 2 success criteria on new OOT (at whichever timeframe is current)
+- SHAP top-20 turnover > 75% from frozen v2.0 baseline (= market structure has fundamentally shifted, current feature set obsolete)
+- Sustained net loss across 2 consecutive quarters despite scheduled retrains
+- 1H fallback also fails §17.9.1 success criteria — both timeframes exhausted means the architecture itself is wrong
+- Realized slippage > 3× backtest assumption sustained ≥1 month (= crowding has eaten the spread, regardless of timeframe)
+
+**v3.0 candidate architectures** (decided when triggered, not predetermined):
+
+- Multi-timeframe ensemble (per §17.4)
+- Regime-aware specialist (per §17.5)
+- Orthogonal-data hybrid (on-chain + OHLCV)
+- Reinforcement learning at portfolio level
+
+#### 17.9.3 Honest acknowledgment
+
+Every algorithmic trading system has a finite lifespan. The goal of v2.0 is to extract edge while it exists, detect decay early, and either adapt cleanly or exit cleanly. There is no "permanent" system. Plan for **18–24 months of v2.x productive life** and design v3.0 as the natural successor — not as an emergency response after the model has already been losing money for a quarter.
+
+**The timeframe ladder is finite: 30m → 1H → v3.0.** No 15m rung. No re-trying 30m after switching to 1H.
+
+---
+
+### 17.10 Maintenance phase governance
+
+§17 operations are themselves spec-governed under §10.5 discipline:
+
+- Decay-monitor metric definitions are frozen at Phase 2.9 freeze and cannot be re-defined to make a failing model "look healthy"
+- Threshold changes in §17.2 / §17.7 require Deviation Request + spec edit + `PROJECT_LOG.md` entry
+- Each scheduled / triggered retrain logs `Phase 5.x [SPEC §17.3] retrain {n} OOT pass/fail` to `PROJECT_LOG.md`
+- v3.0 trigger evaluation is logged quarterly even when not triggered (negative evidence is decision evidence)
+
+This makes long-term decay management auditable and prevents the maintenance phase from becoming the new attack surface for v1.0-style improvisation.
+
+---
+
+## 18. Decision Log
 
 v2.0-specific decisions, extending v1.0's log.
 
@@ -1340,10 +1596,13 @@ v2.0-specific decisions, extending v1.0's log.
 | v2.27| **Database reuse: same Postgres/TimescaleDB instance, new tables only** | Avoid duplicate DB setup, credentials, and extension installs. v2.0 shares v1.0's instance; new tables (`ohlcv_30m`, `features_30m`, `labels_30m`, `wf_folds_30m`, `models_30m`) isolate v2.0 artifacts. v1.0 tables remain read-only reference. See §6.1.1 | 2026-04-25 |
 | v2.28| **4H and 1D derived from 30m in-pipeline, not fetched separately**      | 30m OHLCV is a strict superset of 4H and 1D — any 4H bar = 8 consecutive 30m bars (first/max/min/last/sum); any 1D bar = 48 consecutive 30m bars. Separate fetches double storage and introduce boundary mismatches (archive cutover timestamps). Single-source-of-truth for candle data. See §6.4 Step A | 2026-04-25 |
 | v2.29| **Canonical project naming: `ml-bot/` (v1.0) and `ml-bot-30m/` (v2.0)** | VPS convention. Local folder may still be `hyperliquid-ml-bot-30m/` until manual rename; spec references canonical name. `ml-bot/` path assumed for all v1.0 references (config, features, labeler reuse, `.env` inheritance)                  | 2026-04-25 |
+| v2.30| **Alpha Decay & Regime Adaptation Plan as new §17**                     | AI-driven flow now >50% of crypto perp taker volume; classical-TA edge half-life is months, not years. Any v2.0 model will degrade. §17 codifies live decay metrics (yellow/red bands), 90-day scheduled + threshold-triggered retraining (each retrain = one-shot OOT, no re-tuning), strategy diversification roadmap (v2.1 specialists → v3.0 multi-TF ensemble → v4.0 regime selector), kill switches, monthly research scan + quarterly champion/challenger, and v3.0 trigger criteria. Honest 18–24mo lifecycle assumption built in. Activates Phase 3.5; does not modify Phase 1–3 work | 2026-04-26 |
+| v2.31| **30m primary timeframe re-validated; 1H is the documented fallback; 15m is rejected** | Deep web research (2026-04-26) tested 15m / 30m / 1H against the user's "cannot beat institutional bots" constraint. Findings: (1) 5–15m band is HFT/MM dominated (Wintermute, Jump, Cumberland, Hyperliquid HLP, Aster/Lighter MMs); arb success drops 82%→31% as latency crosses 50→150ms — a regime an individual VPS cannot win. (2) Strongest live-trading anchor is Keller's published LightGBM/XGBoost on 1–4h horizons: Sharpe 1.4 / AUC 0.58 / 54% accuracy post-cost — directly applicable to 30m bars with 1–4h holds. (3) 1H is best per individual factor but has only ~105k bars over 3yr × 4 assets, borderline for a 284-feature LightGBM; 30m gives ~210k bars (2× headroom). (4) 15m halves ATR while keeping Hyperliquid's 0.045% taker fee constant — fee economics turn marginal. **Decision: 30m stays as primary. 1H is the only allowed fallback per §17.9.1. 15m is permanently off the table — re-opening it requires §17.9.2 v3.0 trigger plus explicit user authorization.** Sources: Keller (Medium 2025), López de Prado / Hudson & Thames, MDPI 2024 dataset-size study, Springer 2025 information-bars paper, Hyperliquid fees docs, 21Shares perp DEX wars report. See §17.9.1 for switch-to-1H quantitative triggers | 2026-04-26 |
+| v2.32| **Peer-project deep analysis: 10 adoptions, 4 anti-patterns**           | Deep analysis (2026-04-26) of intelligent-trading-bot, freqtrade/FreqAI, microsoft/qlib, pybroker, jesse, FinRL, TensorTrade. **Adoptions** (most are implementation choices in unfrozen phases — logged in PROJECT_LOG when each phase begins, not in spec): A1 generator-registry architecture for our 22 feature categories (intelligent-trading-bot/common/generators.py), A2 embargo-via-label_horizon as canonical WF reference, A3 forced `train=False` flag on live server (architectural kill-switch), A4 BCa bootstrap CIs on OOT and monitoring (the only spec-affecting one — see §16.3.1 + §17.2 + Phase 2.11 + 5.0), A5 producer/consumer thread separation forward-compat for Phase 4, A6 FreqAI `feature_engineering_expand_all` naming pattern for cross-asset features, A7 score-then-threshold separation (threshold = only Phase 3 tunable), A8 append-only `historic_predictions.pkl`, A9 `label_horizon` tail truncation hardening, A10 DI threshold (out-of-distribution refuse) as Phase 5 kill-switch. **Anti-patterns to NOT import** (codified in §10.5.9): continuous clock-driven retrain, OOT-spanning grid search, online auto-rolling models, auto-PCA, two-binary-heads label combine, flat-dict LGBM training without early-stopping/class-weight, "model zoo" temptation. Their use case ≠ ours; their freedom-to-mutate ≠ our discipline. v2.0 imports rigor we lack from these projects, rejects mutation patterns that would erase OOT | 2026-04-26 |
 
 ---
 
-## 18. References
+## 19. References
 
 ### Research papers (2024–2026)
 
@@ -1467,6 +1726,7 @@ Claude and user both tick items. No item is marked ✅ without spec-section cita
 | 2.8  | Transfer learning: SOL, LINK, TAO (steps 2.1–2.7 each)                    | §14 Ph2   | ☐      |
 | 2.9  | **FREEZE all models** — `models/v2.0_frozen/`                             | §10.5.4   | ☐      |
 | 2.10 | **OOT evaluation (ONCE) — no iteration regardless of result**             | §10.1, 10.2 | ☐    |
+| 2.11 | BCa bootstrap 95% CI for Sharpe / hit-rate / P&L (B=10000); pass = lower bound clears thresholds | §16.3.1 | ☐ |
 
 ### Phase 3 — Paper Trading
 
@@ -1486,6 +1746,21 @@ Claude and user both tick items. No item is marked ✅ without spec-section cita
 | 4.2  | Microstructure refit with Hyperliquid L2 + trade tape                    | §7.2 C21  | ☐      |
 | 4.3  | Hybrid triple-trigger 30m-bias + 5m-execution layer                       | §12.2     | ☐      |
 | 4.4  | CUSUM event-bars experiment                                               | §3.3      | ☐      |
+| 4.5  | Orthogonal feature class (on-chain / funding / news) — decay insurance    | §17.6     | ☐      |
+
+### Phase 5 — Maintenance & Decay Management (continuous, post-Phase 3)
+
+| Step | Action                                                                    | Spec ref  | Status |
+| ---- | ------------------------------------------------------------------------- | --------- | ------ |
+| 5.0  | Build `monitoring/decay_monitor.py` + `decay_metrics_30m` table; nightly BCa bootstrap on rolling 4-week window | §17.2, 16.3.1 | ☐ |
+| 5.1  | Calibrate §17.2 yellow/red thresholds against 4-week paper variance       | §17.2     | ☐      |
+| 5.2  | Calibrate §17.7 kill-switch thresholds against 4-week paper variance      | §17.7     | ☐      |
+| 5.3  | Scheduled retrain every 90 days — each = full mini-Phase, one-shot OOT    | §17.3     | ☐      |
+| 5.4  | Triggered retrain on red metric sustained ≥3 days                         | §17.3     | ☐      |
+| 5.5  | Monthly research scan → `research/monthly_YYYY-MM.md`                     | §17.8     | ☐      |
+| 5.6  | Quarterly champion/challenger evaluation                                  | §17.8     | ☐      |
+| 5.7  | Bi-annual assumption audit (timeframe, asset universe, thresholds)        | §17.8     | ☐      |
+| 5.8  | Quarterly v3.0-trigger evaluation logged regardless of outcome            | §17.9     | ☐      |
 
 ---
 
