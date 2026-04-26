@@ -6,7 +6,7 @@
 **Secondary (higher-TF context):** 4H, 1D
 **Target trade cadence:** 1–3 trades/day per symbol, 2–8 hour average hold
 **Execution venue:** Hyperliquid perpetual futures
-**Training universe:** BTC, SOL, LINK, TAO (Binance SPOT OHLCV) + HYPE (Hyperliquid only)
+**Training universe:** BTC, SOL, LINK (Binance perp OHLCV); TAO and HYPE deferred to Phase 4 candidates per §14 + Decision v2.35
 
 ---
 
@@ -145,7 +145,7 @@ Coinbase Institutional ML analysis of H1 2024: "core drivers of BTC, ETH, and SO
 1. **Profitable edge in backtest and paper trading** — Sharpe ≥ 1.5 net, max DD ≤ 15%, win rate ≥ 52% at P>0.65 threshold
 2. **1–3 trades/day** per symbol (fire rate 2–6% at threshold)
 3. **Momentum-with-structure archetype** — take trades when ML predicts continuation from a structural level (pivot, EMA, swing), exit via ATR trailing stop, 2–8 hour holds
-4. **Transfer learning sequence** — BTC base model → SOL → LINK → TAO → HYPE (user's sequence from memory)
+4. **Transfer learning sequence** — BTC base model → SOL → LINK (3 transfers in v2.0). TAO and HYPE deferred to Phase 4 candidates per §14 / Decision v2.35
 5. **Hyperliquid execution** — bar-close execution initially, intrabar optional Phase 3
 6. **Explainable** — every live trade logs its top-5 SHAP contributors
 
@@ -174,10 +174,10 @@ Coinbase Institutional ML analysis of H1 2024: "core drivers of BTC, ETH, and SO
 ### 5.1 High-level flow
 
 ```
-Binance SPOT (data.binance.vision)
-    ├── 30m OHLCV × {BTC, SOL, LINK, TAO}  ← primary
-    ├── 4H  OHLCV × same                    ← HTF context
-    └── 1D  OHLCV × same                    ← macro context
+Binance perp (data.binance.vision)
+    ├── 30m OHLCV × {BTC, SOL, LINK}        ← primary (only fetched TF; TAO deferred per Decision v2.35)
+    ├── 4H  OHLCV                            ← aggregated from 30m in-pipeline (§6.4)
+    └── 1D  OHLCV                            ← aggregated from 30m in-pipeline (§6.4)
             │
             ▼
     features/builder.py
@@ -224,12 +224,16 @@ Same boundaries as v1.0:
 
 ### 6.1 Data sources
 
-| Source                         | Purpose                  | Timeframes fetched | Storage                    |
-| ------------------------------ | ------------------------ | ------------------ | -------------------------- |
-| `data.binance.vision` (SPOT)  | Training OHLCV          | **30m only**       | `data/storage/binance/`    |
-| Binance daily archives (.zip) | Bulk historical          | monthly archives (30m) | downloader             |
-| Hyperliquid WebSocket         | Live OHLCV + funding + L2 | 30m rollup from trade tape | `data/storage/hyperliquid/` |
-| Hyperliquid REST              | Funding/OI polling       | hourly             | same                       |
+| Source                         | Purpose                  | Timeframes fetched | Assets (v2.0)        | Storage                    |
+| ------------------------------ | ------------------------ | ------------------ | -------------------- | -------------------------- |
+| `data.binance.vision` (SPOT)  | Training OHLCV          | **30m only**       | BTC, SOL, LINK       | `data/storage/binance/`    |
+| Binance daily archives (.zip) | Bulk historical          | monthly archives (30m) | BTC, SOL, LINK   | downloader             |
+| Hyperliquid WebSocket         | Live OHLCV + funding + L2 | 30m rollup from trade tape | BTC, SOL, LINK | `data/storage/hyperliquid/` |
+| Hyperliquid REST              | Funding/OI polling       | hourly             | BTC, SOL, LINK       | same                       |
+
+**v2.0 asset universe: BTC, SOL, LINK** (3 assets). TAO and HYPE are deferred to Phase 4 candidates per Decision v2.35:
+- **TAO:** dropped from v2.0 because (1) Binance perp 30m data ceiling is ~1.5–2 years (incompatible with 3-year minimum per Decision v2.2), (2) Hyperliquid TAO daily volume currently insufficient for reliable execution. Re-entry conditions (all three required): ≥3 years clean Binance perp 30m data accumulated, Hyperliquid TAO daily volume ≥5% of BTC sustained 30 days, v2.x diversification window open.
+- **HYPE:** Hyperliquid-native; deferred to Phase 4.1 per current spec design. No change.
 
 **4H and 1D are NOT fetched separately** — they are derived from the 30m bars in-pipeline via exact aggregation (open=first, high=max, low=min, close=last, volume=sum). This is mathematically lossless and avoids redundant fetches. See §6.4.
 
@@ -261,15 +265,15 @@ database:
 
 4H and 1D data, being derived from 30m, are **not stored as separate tables**. They are aggregated on-the-fly during feature build (cached in-memory per run) and in-memory during live inference.
 
-### 6.2 Data volumes (3-year baseline)
+### 6.2 Data volumes (3-year baseline, 3 assets)
 
-| Timeframe | Source                         | Bars/day | 3-year bars/symbol | 4 symbols | Notes                               |
+| Timeframe | Source                         | Bars/day | 3-year bars/symbol | 3 symbols | Notes                               |
 | --------- | ------------------------------ | -------- | ------------------ | --------- | ----------------------------------- |
-| 30m       | **Fetched** (Binance SPOT)    | 48       | ~52,560            | ~210,000  | primary, only TF fetched            |
-| 4H        | **Aggregated** from 30m       | 6        | ~6,570             | ~26,000   | derived in-pipeline (8 × 30m bars)  |
-| 1D        | **Aggregated** from 30m       | 1        | ~1,095             | ~4,400    | derived in-pipeline (48 × 30m bars) |
+| 30m       | **Fetched** (Binance SPOT)    | 48       | ~52,560            | ~157,800  | primary, only TF fetched            |
+| 4H        | **Aggregated** from 30m       | 6        | ~6,570             | ~19,700   | derived in-pipeline (8 × 30m bars)  |
+| 1D        | **Aggregated** from 30m       | 1        | ~1,095             | ~3,300    | derived in-pipeline (48 × 30m bars) |
 
-With ~202 features, data:feature ratio is ~260:1 per symbol, ~1040:1 pooled — well within healthy training territory.
+With ~202 features, data:feature ratio is ~260:1 per symbol, ~780:1 pooled (post-SHAP trim to ~110-140 features → ~1,130:1 to ~1,435:1 pooled) — well within healthy LightGBM training territory (50:1 to 200:1 comfortable threshold). Asset universe per Decision v2.35: BTC, SOL, LINK.
 
 ### 6.3 Fetcher spec changes from v1.0
 
@@ -647,7 +651,7 @@ Promoted from v1.0 Phase 4 to **Phase 1 for altcoin models** (still Phase 3+ for
 - BTC ATR-normalized move vs this asset's ATR-normalized move (1)
 - BTC above/below its EMA200 daily (macro regime) (1)
 - BTC funding rate (if Phase 3+ microstructure online) (1)
-- ETH correlation with this asset (SOL/LINK/TAO only) (1)
+- ETH correlation with this asset (SOL/LINK only per Decision v2.35; TAO deferred) (1)
 
 Per user's memory: BTC correlation is a **booster, not filter**. Independent altcoin moves remain tradeable.
 
@@ -763,8 +767,8 @@ labeling:
     BTC: 0.6
     SOL: 0.9
     LINK: 0.8
-    TAO: 1.2
-    HYPE: 1.2
+    # TAO: 1.2  # deferred — Phase 4 candidate per Decision v2.35
+    # HYPE: 1.2 # deferred — Phase 4.1 per current design
   classes:
     LONG: 0
     SHORT: 1
@@ -1057,7 +1061,7 @@ Source: deep analysis 2026-04-26 of intelligent-trading-bot, freqtrade/FreqAI, m
 3. **Online auto-rolling models** (qlib's `OnlineManagerR`, similar mechanisms in freqtrade). Automated rolling = automated drift; defeats §10.5.4 freeze gates entirely.
 4. **Auto-PCA dimensionality reduction** (FreqAI's `principal_component_analysis: true`). PCA destroys per-feature SHAP attribution, breaks the static/dynamic taxonomy needed for Phase 4 intrabar safety, and prevents leak audit. Our trim is SHAP TreeExplainer (interpretable) — **never PCA**.
 5. **Two-binary-heads label combine** (intelligent-trading-bot's `gen_labels_highlow.highlow2` then `combine: "difference"`). Our triple-barrier 3-class label correctly represents the "neither hit, time-out" case as NEUTRAL; the two-head pattern collapses this into a low-magnitude false signal. Importing it is a regression.
-6. **Flat-dict LightGBM training without valid_set / early_stopping / class_weight** (intelligent-trading-bot's `classifier_gb.py`). Our Optuna TPE + MedianPruner + Platt calibration pipeline is non-negotiable; the flat-dict pattern silently overfits on minority-class assets like TAO.
+6. **Flat-dict LightGBM training without valid_set / early_stopping / class_weight** (intelligent-trading-bot's `classifier_gb.py`). Our Optuna TPE + MedianPruner + Platt calibration pipeline is non-negotiable; the flat-dict pattern silently overfits on minority-class assets (e.g., LINK as the smallest of v2.0's BTC/SOL/LINK universe).
 7. **"Quant model zoo" temptation** (qlib offers TRA, KRNN, HIST, ADARNN, Tabnet, Transformer-based, etc.). Solo-developer maintenance budget cannot support a model zoo. **LightGBM is the spec.** Model swaps are v3.0-only (§17.9.2), gated by spec re-architecture, not exploration.
 
 If any future agent (or human collaborator, including me-on-a-bad-day) proposes one of these patterns citing "the FreqAI docs say…" or "qlib does it that way…" — the answer is reject by reference to this section. Their use case is different from ours; their freedom to mutate is different from our discipline.
@@ -1070,7 +1074,7 @@ If any future agent (or human collaborator, including me-on-a-bad-day) proposes 
 
 - Bar-close inference (open next bar's order on the *following* bar's open)
 - Triple-barrier exit: TP, SL, or `max_holding_bars` elapsed
-- Fees: Hyperliquid taker 3.5 bps (BTC/SOL/LINK/TAO); 0 maker for HYPE
+- Fees: Hyperliquid taker 4.5 bps (BTC/SOL/LINK in v2.0); 1.5 bps maker; HYPE/TAO when re-introduced per Phase 4
 - Slippage: 2 bps per side (conservative vs HYPE liquidity)
 - Position sizing: fixed 1% risk per trade (stop distance × size = 1% of equity)
 - Single-position per symbol (no pyramiding in Phase 1)
@@ -1190,7 +1194,7 @@ Position sizing formula: `size = (equity × risk_pct) / (stop_distance × instru
 | 2.4  | Re-run walk-forward with tuned params         | Improved metrics                |
 | 2.5  | SHAP analysis + feature trim (~190 → ~120)    | Trimmed feature list            |
 | 2.6  | Probability calibration (Platt scaling)       | Calibrated model                |
-| 2.7  | Transfer learning: SOL, LINK, TAO             | Per-asset models                |
+| 2.7  | Transfer learning: SOL, LINK (per Decision v2.35) | Per-asset models           |
 | 2.8  | **Freeze all models**                         | `models/v2.0_frozen/*.pkl`      |
 | 2.9  | **Single OOT evaluation**                     | One-shot OOT report (no iter)  |
 
@@ -1207,11 +1211,12 @@ Position sizing formula: `size = (equity × risk_pct) / (stop_distance × instru
 
 ### Phase 4: Extensions (Month 3+)
 
-- **4.1** HYPE model on Hyperliquid-native data
+- **4.1** HYPE / TAO models on Hyperliquid-native data — gated by re-entry conditions per Decision v2.35: ≥3 years clean Binance perp 30m data accumulated (TAO), Hyperliquid daily volume ≥5% of BTC sustained 30 days, v2.x diversification window open
 - **4.2** Microstructure refit with Hyperliquid L2 + trade tape features
 - **4.3** Hybrid 30m-bias + 5m-execution layer (Pine script or Python intrabar)
 - **4.4** CUSUM event-bars experiment (compare to time-bar baseline)
 - **4.5** Ensemble with XGBoost / CatBoost (only if Phase 4.1–4.3 saturate)
+- **4.6** Orthogonal feature class (on-chain / funding / news) — decay insurance per §17.6
 
 ---
 
@@ -1226,19 +1231,20 @@ ml-bot-30m/
 ├── .env.example
 ├── data/
 │   ├── collectors/
-│   │   ├── binance_archive.py  # 3-year archive downloader
-│   │   ├── hyperliquid_ws.py   # reused from v1.0
+│   │   ├── binance_archive.py  # NEW (v1.0 had data/collectors/fetcher.py as template)
+│   │   ├── hyperliquid_ws.py   # reused from v1.0 (Phase 3)
 │   │   └── storage.py          # reused
 │   └── storage/
-│       ├── binance/{30m,4h,1d}/
+│       ├── binance/30m/         # 30m only — 4H/1D aggregated in-pipeline (§6.4)
 │       └── hyperliquid/
 ├── features/
 │   ├── __init__.py
 │   ├── _common.py               # reused
 │   ├── builder.py               # MODIFIED: 30m + 4H + 1D merge
-│   ├── indicators.py            # reused
+│   ├── indicators.py            # reused (v1.0 Cat 1 momentum lives here)
 │   ├── htf_context.py           # NEW: Category 2a
-│   ├── momentum_core.py         # MODIFIED: trim from 47→32
+│   ├── momentum_core.py         # NEW: Cat 1 refactor consolidating from indicators.py + extra_momentum.py
+│   ├── extra_momentum.py        # MODIFIED: Cat 15 (Williams %R / CCI / CMO / ROC / TSI), trim per §7.2
 │   ├── volatility.py            # MODIFIED: trim
 │   ├── volume.py                # MODIFIED: trim + VFI fix kept from v1.0
 │   ├── vwap.py                  # MODIFIED: multi-anchor expansion
@@ -1254,33 +1260,40 @@ ml-bot-30m/
 │   ├── sessions.py              # MODIFIED: drop intra-5m buckets
 │   ├── context.py               # MODIFIED: trim
 │   ├── ema_context.py           # reused
-│   └── cross_asset.py           # NEW: promoted Category 22 for altcoins
+│   ├── cross_asset.py           # NEW: promoted Category 22 for altcoins
+│   └── feature_stability.py     # NEW: static/dynamic taxonomy per §7.5
 ├── model/
 │   ├── labeler.py               # reused (triple-barrier with pessimistic tie-break)
-│   ├── train.py
-│   ├── predict.py
-│   └── calibration.py
+│   ├── train.py                 # MODIFIED (Phase 2)
+│   ├── predict.py               # MODIFIED (Phase 2)
+│   └── calibration.py           # NEW (Platt scaling per §9.3, Phase 2)
 ├── tune/
-│   ├── optuna_search.py         # reused
-│   └── shap_analysis.py         # reused
+│   ├── optuna_search.py         # reused (Phase 2)
+│   └── shap_analysis.py         # reused (Phase 2)
 ├── backtest/
-│   └── simulator.py             # reused
+│   └── simulator.py             # reused (Phase 3)
 ├── execution/
-│   ├── predictor_service.py
-│   └── executor_hyperliquid.py
+│   ├── predictor_service.py     # MODIFIED (Phase 3)
+│   └── executor_hyperliquid.py  # MODIFIED (Phase 3)
 ├── scripts/
-│   ├── export_parquet.py        # MODIFIED: accept 30m/4h/1d
-│   ├── relabel.py               # reused
-│   └── baseline_gate.py         # NEW: single-fold gate check
+│   ├── export_parquet.py        # MODIFIED: accept 30m
+│   ├── relabel.py               # reused (used in 1.12 + Phase 5 retrains)
+│   └── baseline_gate.py         # NEW: two-stage gate check per §10.3
+├── monitoring/
+│   └── decay_monitor.py         # NEW (Phase 5, per §17.2)
 ├── models/
 │   ├── v2.0_frozen/             # frozen Phase 2 outputs
+│   ├── v2.0_30m_archive/        # archived after switch-to-1H per §17.9.1 (if triggered)
+│   ├── v2.x_archive/            # post-retrain archive (per §17.3 step 5)
 │   └── paper/                   # live paper-trade checkpoints
+├── research/
+│   └── monthly_YYYY-MM.md       # research scan per §17.8
 ├── logs/
 └── tests/
-    ├── test_htf_merge.py        # NEW
+    ├── test_htf_aggregation.py  # NEW (verifies 30m → 4H/1D resample correctness)
     ├── test_multi_anchor_vwap.py # NEW
-    ├── test_labeler.py          # reused
-    └── test_purged_cv.py        # reused
+    ├── test_labeler.py          # NEW (v1.0 tests/ was empty; written fresh in v2.0)
+    └── test_purged_cv.py        # NEW (v1.0 tests/ was empty; written fresh in v2.0)
 ```
 
 ---
@@ -1355,7 +1368,7 @@ This section is the **decay-aware operational plan**. Phases 1–3 build v2.0; t
 - HTF context features (4H BB, 4H RSI, weekly pivots) — less crowded than 5m RSI signals
 - Multi-anchor VWAP, swing Fib retracements, confluence flags — structural patterns adversaries can't trivially front-run
 - Symmetric labels, walk-forward, one-shot OOT — minimizes overfit-to-noise that decays fastest
-- Asset choice (SOL/LINK/TAO over BTC/ETH only) — long-tail alts have less algo penetration
+- Asset choice (SOL/LINK over BTC/ETH only) — long-tail alts have less algo penetration. TAO deferred per Decision v2.35 until data + Hyperliquid liquidity gates met
 
 These reduce decay rate but do **not** eliminate it. Plan assumes **3–6 month effective edge half-life** and operates accordingly.
 
@@ -1438,7 +1451,7 @@ Each version is a distinct project with its own freeze + OOT discipline. v2.1+ a
 
 **Less-crowded venues / assets:**
 
-- SOL / LINK / TAO already chosen partly for this rationale
+- SOL / LINK already chosen partly for this rationale (TAO deferred per Decision v2.35)
 - Hyperliquid HYPE token (Phase 4): native perp, less institutional algo presence than BTC/ETH/SOL
 - Altcoins with <$500M cap (research): possible Phase 5 expansion if liquidity supports
 
@@ -1490,7 +1503,7 @@ Thresholds tunable in **Phase 3.5** — listed values are starting points, calib
 **Bi-annually (assumption audit):**
 
 - Re-validate that 30m is the optimal primary timeframe vs current AI-penetration level
-- Re-evaluate asset universe (SOL/LINK/TAO + HYPE) — drop assets that no longer show edge, add new candidates
+- Re-evaluate asset universe (BTC/SOL/LINK in v2.0 + Phase 4 candidates TAO/HYPE) — drop assets that no longer show edge, add new candidates as Phase 4 re-entry gates clear (per Decision v2.35)
 - Update §17.2 thresholds if calibration drifted
 
 ---
@@ -1600,6 +1613,8 @@ v2.0-specific decisions, extending v1.0's log.
 | v2.31| **30m primary timeframe re-validated; 1H is the documented fallback; 15m is rejected** | Deep web research (2026-04-26) tested 15m / 30m / 1H against the user's "cannot beat institutional bots" constraint. Findings: (1) 5–15m band is HFT/MM dominated (Wintermute, Jump, Cumberland, Hyperliquid HLP, Aster/Lighter MMs); arb success drops 82%→31% as latency crosses 50→150ms — a regime an individual VPS cannot win. (2) Strongest live-trading anchor is Keller's published LightGBM/XGBoost on 1–4h horizons: Sharpe 1.4 / AUC 0.58 / 54% accuracy post-cost — directly applicable to 30m bars with 1–4h holds. (3) 1H is best per individual factor but has only ~105k bars over 3yr × 4 assets, borderline for a 284-feature LightGBM; 30m gives ~210k bars (2× headroom). (4) 15m halves ATR while keeping Hyperliquid's 0.045% taker fee constant — fee economics turn marginal. **Decision: 30m stays as primary. 1H is the only allowed fallback per §17.9.1. 15m is permanently off the table — re-opening it requires §17.9.2 v3.0 trigger plus explicit user authorization.** Sources: Keller (Medium 2025), López de Prado / Hudson & Thames, MDPI 2024 dataset-size study, Springer 2025 information-bars paper, Hyperliquid fees docs, 21Shares perp DEX wars report. See §17.9.1 for switch-to-1H quantitative triggers | 2026-04-26 |
 | v2.32| **Peer-project deep analysis: 10 adoptions, 4 anti-patterns**           | Deep analysis (2026-04-26) of intelligent-trading-bot, freqtrade/FreqAI, microsoft/qlib, pybroker, jesse, FinRL, TensorTrade. **Adoptions** (most are implementation choices in unfrozen phases — logged in PROJECT_LOG when each phase begins, not in spec): A1 generator-registry architecture for our 22 feature categories (intelligent-trading-bot/common/generators.py), A2 embargo-via-label_horizon as canonical WF reference, A3 forced `train=False` flag on live server (architectural kill-switch), A4 BCa bootstrap CIs on OOT and monitoring (the only spec-affecting one — see §16.3.1 + §17.2 + Phase 2.11 + 5.0), A5 producer/consumer thread separation forward-compat for Phase 4, A6 FreqAI `feature_engineering_expand_all` naming pattern for cross-asset features, A7 score-then-threshold separation (threshold = only Phase 3 tunable), A8 append-only `historic_predictions.pkl`, A9 `label_horizon` tail truncation hardening, A10 DI threshold (out-of-distribution refuse) as Phase 5 kill-switch. **Anti-patterns to NOT import** (codified in §10.5.9): continuous clock-driven retrain, OOT-spanning grid search, online auto-rolling models, auto-PCA, two-binary-heads label combine, flat-dict LGBM training without early-stopping/class-weight, "model zoo" temptation. Their use case ≠ ours; their freedom-to-mutate ≠ our discipline. v2.0 imports rigor we lack from these projects, rejects mutation patterns that would erase OOT | 2026-04-26 |
 | v2.33| **DR-001: phase-scoped selective copy replaces Appendix A mass-copy**   | First implementation-time DR. VPS Claude flagged that `cp -r ml-bot ml-bot-30m` (Appendix A original step 1) ports Phase 2–5 files into Phase 1's workspace, increasing cognitive load and risking stale-file references. §15 is already a file-by-file manifest with `# reused / # MODIFIED / # NEW` annotations — that's the authoritative source. Resolution: each phase copies only the files it needs from `../ml-bot/` when entering that phase; files not in §15 stay at v1.0 forever. Phase 1 copy manifest: data collectors + features/* + model/labeler.py + tests/test_labeler.py + configs/requirements/.gitignore + `.env` (chmod 600, gitignored). Phase 1 NEW files (not in v1.0): htf_context.py, cross_asset.py, feature_stability.py, test_htf_aggregation.py, test_multi_anchor_vwap.py, baseline_gate.py placeholder. Phase 2/3/5 files copied at phase-entry, not before. Appendix A rewritten to make §15 the manifest authority. Approved by user 2026-04-26 | 2026-04-26 |
+| v2.34| **DR-002: Phase 1 manifest reconciled with v1.0 ground truth**          | VPS Claude's recon (`ls ../ml-bot/`) before executing v2.33 caught four spec-vs-reality mismatches: (i) `binance_archive.py` does not exist in v1.0 — actual file is `data/collectors/fetcher.py`; v2.0 `binance_archive.py` is NEW (created from `fetcher.py` template); (ii) `momentum_core.py` does not exist in v1.0 — Cat 1 momentum lives in v1.0 `indicators.py` + Cat 15 in `extra_momentum.py`; v2.0 `momentum_core.py` is NEW (Cat 1 refactor consolidating both); v2.0 also pulls `extra_momentum.py` (MODIFIED, Cat 15 trim); (iii) v1.0 `tests/` directory is empty — `test_labeler.py` and `test_purged_cv.py` are v2.0 NEW (not "reused"); (iv) v1.0 has no `pyproject.toml`/`setup.cfg` — drop from manifest (no-op). Plus reconciliation: `scripts/export_parquet.py` (MODIFIED) and `scripts/relabel.py` (reused, used in 1.12) added to Phase 1 manifest. Spec edits: §15 directory tree (4 annotations corrected, `extra_momentum.py` and `feature_stability.py` added, `test_purged_cv.py` re-marked NEW), Appendix A.1 (Phase 1 copy + NEW lists rewritten to match), BOOTSTRAP_VPS.md STEP 14 (`fetcher.py` as template, not `binance_archive.py`). Demonstrates v2.33's principle (§15 = manifest authority) requires §15 to mirror reality — patching only Appendix A would leave §15 stale, replicating the same mismatch DR-002 caught. Approved by user 2026-04-26 | 2026-04-26 |
+| v2.35| **DR-003: TAO removed from v2.0; asset universe = BTC/SOL/LINK**        | Pre-Phase-1 design discussion. User questioned 3yr training window, considered 5–6yr. Discussion surfaced (a) hard data ceiling for TAO (Binance perp 30m only ~1.5–2yr available, incompatible with 3yr minimum from Decision v2.2), (b) low Hyperliquid TAO daily volume making execution unreliable, (c) stationarity argument against extending window into pre-2023 era (FTX-collapse regime break for SOL Nov 2022, pre-AI-saturation market, MDPI 2024 evidence that noisier old data degrades LightGBM). User confirmed: **keep 3yr window** (Decision v2.2 stays); **drop TAO** from v2.0. v2.0 asset universe is now **BTC, SOL, LINK** (3 assets, ~158k pooled samples, ~1,130:1 to ~1,435:1 sample/feature ratio post-trim — healthy). TAO becomes a Phase 4 candidate alongside HYPE; re-entry conditions (all three required): ≥3 years clean Binance perp 30m data accumulated, Hyperliquid TAO daily volume ≥5% of BTC sustained 30 days, v2.x diversification window open. DR-004 (window extension + per-period SHAP audit) WITHDRAWN — not needed since 3yr stays. Spec edits: §1 header (training universe), §1.4 transfer learning sequence, §5.1 architecture diagram, §6.1 (data sources table + new TAO/HYPE deferral subsection), §6.2 volumes table (4 → 3 symbols), §7.2 Cat 22 (TAO row removed from cross-asset features), §10.5.9 anti-pattern reference (LINK now smallest minority asset, not TAO), §11.1 fees (TAO/HYPE deferred), §14 Phase 2.7 + 4.1 (3 transfers, HYPE/TAO gated re-entry, NEW Phase 4.6 orthogonal feature class), §17.1 / §17.6 / §17.8 references updated, Appendix C steps 1.1 + 2.8 (3 assets). Approved by user 2026-04-26 | 2026-04-26 |
 
 ---
 
@@ -1647,12 +1662,12 @@ v2.0-specific decisions, extending v1.0's log.
 
 If bootstrapping v2.0 by copying v1.0 rather than greenfield:
 
-1. **Phase-scoped selective copy from `../ml-bot/`** (per Decision Log v2.33 / DR-001). **§15 is the authoritative file manifest** — do **NOT** mass-copy. Each phase copies only the files it actually needs from `../ml-bot/` when entering that phase. Files not listed in §15 (5m-specific scalping features, intrabar execution code, deprecated experiments, pre-cleanup branches) stay at v1.0 and never come over. Phase scope:
-   - **Phase 1** (data + features + labeler): `data/collectors/binance_archive.py` (template), `data/collectors/storage.py`, `features/__init__.py`, `features/_common.py`, `features/builder.py`, `features/indicators.py`, `features/momentum_core.py`, `features/volatility.py`, `features/volume.py`, `features/vwap.py`, `features/pivots.py`, `features/candles.py`, `features/structure.py`, `features/divergence.py`, `features/event_memory.py`, `features/adaptive_ma.py`, `features/ichimoku.py`, `features/regime.py`, `features/stats.py`, `features/sessions.py`, `features/context.py`, `features/ema_context.py`, `model/labeler.py`, `tests/test_labeler.py`, `requirements.txt`, `pyproject.toml`/`setup.cfg`, `.gitignore`, `config.yaml`. Plus `.env` (per step 3 below).
-   - **Phase 1 NEW files** (do not exist in v1.0; create in `ml-bot-30m/`): `features/htf_context.py` (Cat 2a), `features/cross_asset.py` (Cat 22), `features/feature_stability.py` (§7.5 taxonomy), `tests/test_htf_aggregation.py`, `tests/test_multi_anchor_vwap.py`, `scripts/baseline_gate.py` (placeholder OK in Phase 1).
-   - **Phase 2** (training + tuning): copy `model/train.py`, `model/predict.py`, `model/calibration.py`, `tune/optuna_search.py`, `tune/shap_analysis.py` when entering Phase 2 — not before.
-   - **Phase 3** (paper trading): copy `backtest/simulator.py`, `execution/predictor_service.py`, `execution/executor_hyperliquid.py` when entering Phase 3.
-   - **Phase 5** (maintenance): copy/create `monitoring/decay_monitor.py` when entering Phase 5.
+1. **Phase-scoped selective copy from `../ml-bot/`** (per Decision Log v2.33 / DR-001, reconciled with v1.0 ground truth per Decision Log v2.34 / DR-002). **§15 is the authoritative file manifest** — do **NOT** mass-copy. Each phase copies only the files it actually needs from `../ml-bot/` when entering that phase. Files not listed in §15 (5m-specific scalping features, intrabar execution code, deprecated experiments, pre-cleanup branches) stay at v1.0 and never come over. Phase scope:
+   - **Phase 1 — copy from `../ml-bot/`** (data + features + labeler): `data/collectors/fetcher.py` → rename to `data/collectors/binance_archive.py` in v2.0 (it is the v1.0 archive fetcher template per DR-002), `data/collectors/storage.py`, `features/__init__.py`, `features/_common.py`, `features/builder.py`, `features/indicators.py`, `features/extra_momentum.py` (Cat 15), `features/volatility.py`, `features/volume.py`, `features/vwap.py`, `features/pivots.py`, `features/candles.py`, `features/structure.py`, `features/divergence.py`, `features/event_memory.py`, `features/adaptive_ma.py`, `features/ichimoku.py`, `features/regime.py`, `features/stats.py`, `features/sessions.py`, `features/context.py`, `features/ema_context.py`, `model/labeler.py`, `scripts/export_parquet.py` (MODIFIED for 30m), `scripts/relabel.py` (used in 1.12), `requirements.txt`, `.gitignore`, `config.yaml`. Plus `.env` (per step 4 below). **Note:** v1.0 has no `pyproject.toml` or `setup.cfg` — skip those (no-op). v1.0 `tests/` directory is empty — no tests to copy.
+   - **Phase 1 — NEW files** (do not exist in v1.0; create fresh in `ml-bot-30m/`): `features/htf_context.py` (Cat 2a), `features/momentum_core.py` (Cat 1 refactor consolidating Cat 1 logic from `indicators.py` + `extra_momentum.py`), `features/cross_asset.py` (Cat 22), `features/feature_stability.py` (§7.5 taxonomy), `tests/test_htf_aggregation.py`, `tests/test_multi_anchor_vwap.py`, `tests/test_labeler.py` (v1.0 tests/ was empty), `tests/test_purged_cv.py` (v1.0 tests/ was empty), `scripts/baseline_gate.py` (placeholder OK in Phase 1).
+   - **Phase 2 — copy when entering Phase 2** (training + tuning): `model/train.py`, `model/predict.py`, `tune/optuna_search.py`, `tune/shap_analysis.py`. NEW in Phase 2: `model/calibration.py` (Platt scaling per §9.3).
+   - **Phase 3 — copy when entering Phase 3** (paper trading): `backtest/simulator.py`, `execution/predictor_service.py`, `execution/executor_hyperliquid.py`, `data/collectors/hyperliquid_ws.py`.
+   - **Phase 5 — create when entering Phase 5** (maintenance): `monitoring/decay_monitor.py` (NEW per §17.2).
 2. Keep the v1.0 `ml-bot/` repo **intact** as reference — never edit, never commit changes there. v2.0 changes happen only in `ml-bot-30m/`.
 3. **Scaffold §15 directory tree** as empty subdirs at project init (one-shot, before any file copies): `data/{collectors,storage/binance/30m,storage/hyperliquid}/`, `features/`, `model/`, `tune/`, `backtest/`, `execution/`, `scripts/`, `monitoring/`, `models/{v2.0_frozen,paper,v2.x_archive}/`, `research/`, `logs/`, `tests/`. Empty subdirs make the per-phase copy targets explicit and prevent accidental file placement.
 4. **Database reuse (no setup):** v2.0 shares the v1.0 Postgres/TimescaleDB instance. Copy `.env` from `ml-bot/` (same `DATABASE_URL`, same credentials, `chmod 600`, verify `git check-ignore .env` returns `.env`). Do **not** create a new schema or re-run TimescaleDB install. New tables are added per §6.1.1 (`ohlcv_30m`, `features_30m`, `labels_30m`, `wf_folds_30m`, `models_30m`); v1.0 tables (`ohlcv_5m`, `ohlcv_1h`, …) remain untouched.
@@ -1700,7 +1715,7 @@ Claude and user both tick items. No item is marked ✅ without spec-section cita
 | Step | Action                                                                    | Spec ref  | Status |
 | ---- | ------------------------------------------------------------------------- | --------- | ------ |
 | 1.0  | Read the full spec (especially §10.5) before first tool call              | §10.5     | ☐      |
-| 1.1  | Binance archive downloader — 3 yrs × {BTC,SOL,LINK,TAO} × {30m,4h,1d}    | §6.1, 6.3 | ☐      |
+| 1.1  | Binance archive downloader — 3 yrs × {BTC, SOL, LINK} × 30m only          | §6.1, 6.3 | ☐      |
 | 1.2  | Verify no gaps, UTC timestamps, canonical boundaries                      | §6.3      | ☐      |
 | 1.3  | Adapt `features/builder.py` to 30m primary + dual HTF (4H, 1D) merge     | §6.4      | ☐      |
 | 1.4  | Create `features/htf_context.py` (Cat 2a, 18 features)                    | §7.2 C2a  | ☐      |
@@ -1727,7 +1742,7 @@ Claude and user both tick items. No item is marked ✅ without spec-section cita
 | 2.5  | Re-run walk-forward with tuned params                                     | §9.4      | ☐      |
 | 2.6  | SHAP analysis + feature trim to ~110–140                                 | §9.5      | ☐      |
 | 2.7  | Probability calibration (Platt scaling)                                   | §9.3      | ☐      |
-| 2.8  | Transfer learning: SOL, LINK, TAO (steps 2.1–2.7 each)                    | §14 Ph2   | ☐      |
+| 2.8  | Transfer learning: SOL, LINK (steps 2.1–2.7 each, per Decision v2.35)     | §14 Ph2   | ☐      |
 | 2.9  | **FREEZE all models** — `models/v2.0_frozen/`                             | §10.5.4   | ☐      |
 | 2.10 | **OOT evaluation (ONCE) — no iteration regardless of result**             | §10.1, 10.2 | ☐    |
 | 2.11 | BCa bootstrap 95% CI for Sharpe / hit-rate / P&L (B=10000); pass = lower bound clears thresholds | §16.3.1 | ☐ |

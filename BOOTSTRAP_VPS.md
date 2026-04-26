@@ -311,7 +311,8 @@ After Steps 1–4 above, your first state-changing action is:
   Sequence:
     a) Append to PROJECT_LOG:
          <UTC now>  Phase 1.1  [SPEC §6.1, §6.3]  starting 30m archive download
-    b) Read ../ml-bot/data/collectors/binance_archive.py as template
+    b) Read ../ml-bot/data/collectors/fetcher.py as template (per Decision v2.34;
+       v1.0 file is named fetcher.py — `binance_archive.py` is the v2.0 NEW name)
     c) Implement ml-bot-30m/data/collectors/binance_archive.py:
          - single timeframe param --timeframe 30m
          - 4 assets, 3+ years
