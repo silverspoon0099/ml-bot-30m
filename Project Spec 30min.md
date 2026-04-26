@@ -1,6 +1,6 @@
 # Project Spec — 30min ML Trading Bot (v2.0)
 
-**Status:** Design document for a new project, derived from `hyperliquid-ml-bot/PROJECT_SPEC.md` (the 5m project).
+**Status:** Design document for a new project, derived from `ml-bot/PROJECT_SPEC.md` (the 5m project).
 **Created:** 2026-04-23
 **Primary timeframe:** 30m bar close
 **Secondary (higher-TF context):** 4H, 1D
@@ -208,13 +208,15 @@ Binance SPOT (data.binance.vision)
 
 ### 5.2 Module boundaries
 
-Same boundaries as v1.0 but with renamed HTF references:
-- `data/collectors/` — Binance + Hyperliquid ingestion (reused, add 4H/1D timeframes)
+Same boundaries as v1.0:
+- `data/collectors/` — Binance + Hyperliquid ingestion. **Only 30m is fetched**; 4H and 1D are aggregated from 30m in-pipeline (§6.4).
 - `features/` — per-category modules (reused, internal parameter changes)
 - `model/` — labeler, training, inference (reused)
 - `tune/` — Optuna search (reused)
 - `backtest/` — simulator (reused)
 - `execution/` — Hyperliquid orders (reused)
+
+**Database (v1.0 instance reused):** v2.0 shares the v1.0 Postgres/TimescaleDB instance. No new schema is created. Only **new tables** are added for 30m rollups and derived artifacts. Credentials, connection string, and extensions (TimescaleDB) are inherited via `.env` from the v1.0 setup. See §6.1.1 for table naming.
 
 ---
 
@@ -222,52 +224,104 @@ Same boundaries as v1.0 but with renamed HTF references:
 
 ### 6.1 Data sources
 
-| Source                         | Purpose                  | Timeframes       | Storage                    |
-| ------------------------------ | ------------------------ | ---------------- | -------------------------- |
-| `data.binance.vision` (SPOT)  | Training OHLCV          | 30m, 4H, 1D     | `data/storage/binance/`    |
-| Binance daily archives (.zip) | Bulk historical          | monthly archives | downloader                 |
-| Hyperliquid WebSocket         | Live OHLCV + funding + L2 | 30m aggregated + 4H rollup | `data/storage/hyperliquid/` |
-| Hyperliquid REST              | Funding/OI polling       | hourly           | same                       |
+| Source                         | Purpose                  | Timeframes fetched | Storage                    |
+| ------------------------------ | ------------------------ | ------------------ | -------------------------- |
+| `data.binance.vision` (SPOT)  | Training OHLCV          | **30m only**       | `data/storage/binance/`    |
+| Binance daily archives (.zip) | Bulk historical          | monthly archives (30m) | downloader             |
+| Hyperliquid WebSocket         | Live OHLCV + funding + L2 | 30m rollup from trade tape | `data/storage/hyperliquid/` |
+| Hyperliquid REST              | Funding/OI polling       | hourly             | same                       |
+
+**4H and 1D are NOT fetched separately** — they are derived from the 30m bars in-pipeline via exact aggregation (open=first, high=max, low=min, close=last, volume=sum). This is mathematically lossless and avoids redundant fetches. See §6.4.
 
 **Why Binance SPOT for training:** user's VPS region returns HTTP 451 on Binance main/fapi; `data.binance.vision` is geo-open. SPOT vs perp OHLCV correlation is >99% with <0.1% basis — statistically negligible for feature engineering.
 
+### 6.1.1 Database reuse (v1.0 instance)
+
+**v2.0 uses the same Postgres/TimescaleDB instance as v1.0.** No new database creation, no new schema, no credential changes. Only new tables are added — no existing v1.0 table is read from or written to by v2.0.
+
+**Table naming convention (additions only):**
+
+| Purpose                                    | New table                                  |
+| ------------------------------------------ | ------------------------------------------ |
+| 30m OHLCV (Binance spot, historical)       | `ohlcv_30m`                                |
+| 30m OHLCV (Hyperliquid live, 30m rollup)   | `ohlcv_30m_hl`                             |
+| 30m feature matrix (output of builder)     | `features_30m`                             |
+| 30m triple-barrier labels                  | `labels_30m`                               |
+| Walk-forward fold metadata                 | `wf_folds_30m`                             |
+| Model registry (frozen artifacts metadata) | `models_30m`                               |
+
+**Schema extensions to v1.0 config.yaml (additions only, no overwrites):**
+
+```yaml
+database:
+  # NEW — 30m OHLCV Timescale chunking (between 5m and 1h)
+  chunk_interval_ohlcv_30m: "90 days"
+  # existing entries are inherited: chunk_interval_ohlcv_5m, _1h, compression, retention, etc.
+```
+
+4H and 1D data, being derived from 30m, are **not stored as separate tables**. They are aggregated on-the-fly during feature build (cached in-memory per run) and in-memory during live inference.
+
 ### 6.2 Data volumes (3-year baseline)
 
-| Timeframe | Bars/day | 3-year bars/symbol | 4 symbols |
-| --------- | -------- | ------------------ | --------- |
-| 30m       | 48       | ~52,560            | ~210,000  |
-| 4H        | 6        | ~6,570             | ~26,000   |
-| 1D        | 1        | ~1,095             | ~4,400    |
+| Timeframe | Source                         | Bars/day | 3-year bars/symbol | 4 symbols | Notes                               |
+| --------- | ------------------------------ | -------- | ------------------ | --------- | ----------------------------------- |
+| 30m       | **Fetched** (Binance SPOT)    | 48       | ~52,560            | ~210,000  | primary, only TF fetched            |
+| 4H        | **Aggregated** from 30m       | 6        | ~6,570             | ~26,000   | derived in-pipeline (8 × 30m bars)  |
+| 1D        | **Aggregated** from 30m       | 1        | ~1,095             | ~4,400    | derived in-pipeline (48 × 30m bars) |
 
-With ~190 features, data:feature ratio is ~1100:1 per symbol, ~3500:1 pooled — well within healthy training territory.
+With ~202 features, data:feature ratio is ~260:1 per symbol, ~1040:1 pooled — well within healthy training territory.
 
 ### 6.3 Fetcher spec changes from v1.0
 
 Reuse `scripts/export_parquet.py` with additions:
-- Accept `--timeframes 30m 4h 1d` (was `5m 1h`)
+- Accept `--timeframe 30m` (single TF only; was `5m 1h`)
 - Accept `--years 3` (was `--months 18`)
-- Verify: no gaps, all timestamps on canonical 30m/4h/1d boundaries, UTC
-- Parquet schema unchanged (timestamp ms int, open, high, low, close, volume)
+- Write to Postgres table `ohlcv_30m` (new) AND optional parquet backup at `data/storage/binance/30m/`
+- Verify: no gaps, all timestamps on canonical 30m boundaries, UTC
+- Parquet schema unchanged from v1.0 (timestamp ms int, open, high, low, close, volume)
 
-### 6.4 Multi-timeframe merge
+### 6.4 Multi-timeframe aggregation + merge
 
-The look-ahead-safe merge logic is unchanged from v1.0, only the target TF changes:
+Aggregation and merge happen in one pipeline step during feature build — neither 4H nor 1D is persisted as a separate table.
+
+**Step A — Aggregate (lossless, in-memory):**
+
+```python
+# 30m → 4H: group every 8 consecutive 30m bars by floor-to-4h-boundary
+df_4h = df_30m.resample("4H", on="timestamp", label="left", closed="left").agg({
+    "open":   "first",
+    "high":   "max",
+    "low":    "min",
+    "close":  "last",
+    "volume": "sum",
+})
+
+# 30m → 1D: same pattern with "1D" resample
+df_1d = df_30m.resample("1D", on="timestamp", label="left", closed="left").agg({...})
+```
+
+Resample is `label="left", closed="left"` so the 4H bar at 12:00 UTC represents 12:00–15:59:59; its close is the 30m bar at 15:30 close. No look-ahead: the 4H bar is only marked "complete" once the 15:30 30m bar closes.
+
+**Step B — Compute HTF features natively on the aggregated frames:**
+
+All Category 2a features (§7.2) are computed on `df_4h` and `df_1d` directly, not on 30m.
+
+**Step C — Merge to 30m frame via prev-closed-bar lookup:**
 
 ```
 30m bar at time t (UTC, 30m boundary)
-    ↓ floor to prior 4H boundary
-    ↓ shift(1): use the 4H bar that closed at that boundary, not the one open
+    ↓ floor to prior 4H boundary → k_4h
+    ↓ use 4H features indexed at (k_4h - 1 × 4H) — i.e., the PREVIOUS COMPLETED 4H bar
+    ↓ (same for 1D: use previous completed 1D bar)
     ↓
-4H features indexed by their close-time, mapped to all 30m bars within the next 4H window
-
-Same pattern for 1D → 30m merge.
+30m frame now has htf4h_* and htf1d_* columns filled via prev-bar lookup
 ```
 
-This preserves the "PREVIOUS completed bar" discipline from v1.0's 1H→5m merge.
+The "prev completed bar" discipline from v1.0's 1H→5m merge is preserved. At the boundary (e.g., the 30m bar at 16:00 UTC is the first bar of the new 4H window), it reads the just-closed 4H bar that covered 12:00–15:59:59.
 
 ### 6.5 Live data (Phase 3+)
 
-Hyperliquid WebSocket and funding REST — same architecture as v1.0, but bar aggregation switches to 30m rollups instead of 5m.
+Hyperliquid WebSocket and funding REST — same architecture as v1.0, but bar aggregation rolls 30m from the trade tape. 4H and 1D are re-aggregated from 30m at each inference tick using the same logic as §6.4.
 
 ---
 
@@ -967,7 +1021,7 @@ If Claude cannot cleanly answer any of these, Claude re-reads the spec + `PROJEC
 
 #### 10.5.6 PROJECT_LOG.md — the decision trail
 
-Every non-trivial action writes a one-line entry to `hyperliquid-ml-bot-30m/PROJECT_LOG.md`:
+Every non-trivial action writes a one-line entry to `ml-bot-30m/PROJECT_LOG.md`:
 
 ```
 2026-04-25 14:32  Phase 1.1  [SPEC §6.3]  Exported 30m BTC 2023-04..2026-03 → data/storage/binance/30m/BTC_USDT.parquet (52416 rows)
@@ -1149,10 +1203,10 @@ Position sizing formula: `size = (equity × risk_pct) / (stop_distance × instru
 
 ## 15. Directory Structure
 
-Proposed new project root: `hyperliquid-ml-bot-30m/` (sibling to `hyperliquid-ml-bot/`, not an overwrite).
+Proposed new project root: `ml-bot-30m/` (sibling to the existing v1.0 repo at `ml-bot/`, not an overwrite).
 
 ```
-hyperliquid-ml-bot-30m/
+ml-bot-30m/
 ├── PROJECT_SPEC.md              # this document (copy/rename)
 ├── config.yaml                  # v2.0 config
 ├── .env.example
@@ -1283,6 +1337,9 @@ v2.0-specific decisions, extending v1.0's log.
 | v2.24| **Process Discipline as non-negotiable spec section (§10.5)**           | v1.0 failed partly because Claude made 7+ rounds of independent judgment calls mid-phase, each drifting from the design, contaminating OOT. User is not an ML specialist and trusted per-step opinions. Root cause documented; rules lock it down | 2026-04-25 |
 | v2.25| **Phase Checklist (Appendix C) + PROJECT_LOG.md (Appendix D)**         | Makes §10.5 auditable in practice: tick-through list + append-only decision trail citing spec sections. Makes drift visible immediately instead of 3 weeks later | 2026-04-25 |
 | v2.26| **Fresh-start 30m, do not restart 5m**                                  | 5m OOT is already compromised by v1.0 iterations; restarting would train against seen hold-out. 30m gives clean OOT + better SNR vs fees. Discipline fix applies from day 1 regardless | 2026-04-25 |
+| v2.27| **Database reuse: same Postgres/TimescaleDB instance, new tables only** | Avoid duplicate DB setup, credentials, and extension installs. v2.0 shares v1.0's instance; new tables (`ohlcv_30m`, `features_30m`, `labels_30m`, `wf_folds_30m`, `models_30m`) isolate v2.0 artifacts. v1.0 tables remain read-only reference. See §6.1.1 | 2026-04-25 |
+| v2.28| **4H and 1D derived from 30m in-pipeline, not fetched separately**      | 30m OHLCV is a strict superset of 4H and 1D — any 4H bar = 8 consecutive 30m bars (first/max/min/last/sum); any 1D bar = 48 consecutive 30m bars. Separate fetches double storage and introduce boundary mismatches (archive cutover timestamps). Single-source-of-truth for candle data. See §6.4 Step A | 2026-04-25 |
+| v2.29| **Canonical project naming: `ml-bot/` (v1.0) and `ml-bot-30m/` (v2.0)** | VPS convention. Local folder may still be `hyperliquid-ml-bot-30m/` until manual rename; spec references canonical name. `ml-bot/` path assumed for all v1.0 references (config, features, labeler reuse, `.env` inheritance)                  | 2026-04-25 |
 
 ---
 
@@ -1299,10 +1356,10 @@ v2.0-specific decisions, extending v1.0's log.
 
 ### v1.0 artifacts (inputs to v2.0)
 
-- `hyperliquid-ml-bot/PROJECT_SPEC.md` — 1980-line v1.0 specification
-- `hyperliquid-ml-bot/features/*.py` — reference implementations (most reused)
-- `hyperliquid-ml-bot/model/labeler.py` — triple-barrier with pessimistic tie-break (reused)
-- `hyperliquid-ml-bot/config.yaml` — baseline config (modified per §8, §9)
+- `ml-bot/PROJECT_SPEC.md` — 1980-line v1.0 specification
+- `ml-bot/features/*.py` — reference implementations (most reused)
+- `ml-bot/model/labeler.py` — triple-barrier with pessimistic tie-break (reused)
+- `ml-bot/config.yaml` — baseline config (modified per §8, §9); DB credentials **inherited via `.env`** (same Postgres/TimescaleDB instance, new tables per §6.1.1)
 
 ### TradingView AI consultations (2026-04-23)
 
@@ -1330,18 +1387,24 @@ v2.0-specific decisions, extending v1.0's log.
 
 If bootstrapping v2.0 by copying v1.0 rather than greenfield:
 
-1. `cp -r hyperliquid-ml-bot hyperliquid-ml-bot-30m`
-2. Update `config.yaml` per §6, §7, §8, §9
-3. Rename `features/builder.py` HTF merge from `merge_1h_into_5m` → `merge_htf_into_30m`, support both 4H and 1D
-4. Create `features/htf_context.py` (Category 2a)
-5. Extend `features/vwap.py` with multi-anchor VWAP (Category 5 expansion)
-6. Promote `weekly_pivot_features()` in `features/pivots.py` to Phase 1 output
-7. Trim per-category feature outputs per §7.2
-8. Update `scripts/export_parquet.py` for 30m/4h/1d timeframes
-9. Create `scripts/baseline_gate.py`
-10. Update all tests; add `test_htf_merge.py` and `test_multi_anchor_vwap.py`
-11. Rename `models/` to `models/v2.0_frozen/` for checkpoint separation
-12. Keep the v1.0 `hyperliquid-ml-bot/` repo intact as a reference
+1. `cp -r ml-bot ml-bot-30m` (v1.0 repo lives at `../ml-bot/` relative to v2.0)
+2. Keep the v1.0 `ml-bot/` repo **intact** as reference — do not edit it
+3. **Database reuse (no setup):** v2.0 shares the v1.0 Postgres/TimescaleDB instance. Copy `.env` from `ml-bot/` (same `DATABASE_URL`, same credentials). Do **not** create a new schema or re-run TimescaleDB install. New tables are added per §6.1.1 (`ohlcv_30m`, `features_30m`, `labels_30m`, `wf_folds_30m`, `models_30m`); v1.0 tables (`ohlcv_5m`, `ohlcv_1h`, …) remain untouched
+4. **30m-only data fetch:** do not add 4H/1D fetchers. 30m OHLCV is the sole fetched timeframe; 4H and 1D are aggregated lossly from 30m at feature-build time via pandas `resample` (§6.4 Step A). Verify: 8×30m rows aggregate → 1×4H row with OHLC reconstructed from first/max/min/last and volume summed
+5. Update `config.yaml` per §6, §7, §8, §9; add `chunk_interval_ohlcv_30m: "90 days"` and remove stale 5m/1h-specific keys
+6. Rename `features/builder.py` HTF merge from `merge_1h_into_5m` → `merge_htf_into_30m`; implement as "aggregate 4H+1D from 30m, then prev-bar merge" (§6.4 Steps A–C)
+7. Create `features/htf_context.py` (Category 2a, 18 features; consumes aggregated 4H/1D)
+8. Extend `features/vwap.py` with multi-anchor VWAP (Category 5 expansion)
+9. Promote `weekly_pivot_features()` in `features/pivots.py` to Phase 1 output
+10. Add Category 6 expansions (6.2 continuous 0–1 pos + ATR dist, 6.4 weekly continuous + ATR, 6.5 swing Fib retracements, confluence flags) per §7.2
+11. Tag every feature `static` / `dynamic` / `mixed` in `feature_stability.py` per §7.5
+12. Trim per-category feature outputs per §7.2 deltas
+13. Update `scripts/export_parquet.py` for 30m (aggregated 4h/1d materialized on demand from 30m)
+14. Create `scripts/baseline_gate.py` (two-stage gate per §10.3)
+15. Update all tests; add `test_htf_aggregation.py` (verifies 30m→4H/1D resample correctness) and `test_multi_anchor_vwap.py`
+16. Rename `models/` to `models/v2.0_frozen/` for checkpoint separation
+17. Initialize `PROJECT_LOG.md` (Appendix D template) at project root
+18. Read `Project Spec 30min.md` §10.5 end-to-end before any Phase 1 tool call
 
 ---
 
@@ -1428,10 +1491,10 @@ Claude and user both tick items. No item is marked ✅ without spec-section cita
 
 ## Appendix D — PROJECT_LOG.md template
 
-Create `hyperliquid-ml-bot-30m/PROJECT_LOG.md` at project start with this header, then append one line per non-trivial action.
+Create `ml-bot-30m/PROJECT_LOG.md` at project start with this header, then append one line per non-trivial action.
 
 ```
-# PROJECT_LOG — hyperliquid-ml-bot-30m (v2.0)
+# PROJECT_LOG — ml-bot-30m (v2.0)
 
 Append-only decision trail per Project Spec 30min §10.5.6.
 Format: YYYY-MM-DD HH:MM  <Phase.step>  [SPEC §<section>]  <one-line summary>
