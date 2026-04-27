@@ -648,16 +648,19 @@ Same as v1.0. Requires 2–3 months of Hyperliquid WebSocket collection before i
 - Large-print frequency
 - Absorption flags (heavy buy/sell without price move)
 
-#### Category 22 — Cross-Asset Correlation (6 → 8 features, Phase 1 for altcoins)
+#### Category 22 — Cross-Asset Correlation (6 → 7 features, Phase 1 for altcoins)
 
 Promoted from v1.0 Phase 4 to **Phase 1 for altcoin models** (still Phase 3+ for BTC — BTC has nothing to correlate to within this universe).
 
-- BTC 20-bar correlation with this asset (1)
-- BTC return last 1 bar, 3 bar, 12 bar (3)
-- BTC ATR-normalized move vs this asset's ATR-normalized move (1)
-- BTC above/below its EMA200 daily (macro regime) (1)
-- BTC funding rate (if Phase 3+ microstructure online) (1)
-- ETH correlation with this asset (SOL/LINK only per Decision v2.35; TAO deferred) (1)
+- `btc_corr_20bar` — BTC 20-bar return correlation with this asset (1)
+- `btc_return_1bar`, `btc_return_3bar`, `btc_return_12bar` — BTC % return at 1/3/12 bar lags (3)
+- `btc_vs_asset_atr_norm_diff` — `(btc_move/atr_btc) − (asset_move/atr_asset)` per Decision v2.41 Q10 (signed: positive = BTC led in vol-units, negative = asset led / decoupled alt strength) (1)
+- `btc_above_ema200_daily` — sign(BTC_close_daily − BTC_EMA200_daily), prev-day-shifted to avoid look-ahead (macro regime: +1 bull, −1 bear) (1)
+- `btc_funding_rate` — Phase 3+ only, gated on Hyperliquid microstructure online (1)
+
+**Total: 7 features.** Phase 1 fires 6 of these (BTC funding is Phase 3+).
+
+**ETH correlation: DROPPED entirely per Decision v2.41 Q9.** Original spec listed ETH correlation as the 8th Cat 22 feature; user dropped because (a) ETH is not in v2.0 trade universe (Decision v2.35 fetched BTC/SOL/LINK only), (b) marginal lift over the 6 BTC-driven features doesn't justify adding ETH to the asset fetch + maintenance footprint, (c) BTC correlation already captures the bulk of cross-asset signal. If the cost-benefit shifts later, re-add via Deviation Request.
 
 Per user's memory: BTC correlation is a **booster, not filter**. Independent altcoin moves remain tradeable.
 
@@ -687,10 +690,10 @@ Per user's memory: BTC correlation is a **booster, not filter**. Independent alt
 | 19  | Ichimoku                           | 5         | 6          | +1  |
 | 20  | Event Memory                       | 41        | 22         | −19 |
 | 21  | Microstructure (Hyperliquid)       | 21        | 21         | 0   |
-| 22  | Cross-Asset Correlation            | 6         | 8          | +2  |
-|     | **Phase 1 total (ex 21, 22-BTC)** | **268**   | **~202**   | −66 |
-|     | **Phase 3 total**                  | 289       | ~231       | −58 |
-|     | **Phase 4 full**                   | 295       | ~239       | −56 |
+| 22  | Cross-Asset Correlation            | 6         | 7          | +1  |
+|     | **Phase 1 total (ex 21, 22-BTC)** | **268**   | **~201**   | −67 |
+|     | **Phase 3 total**                  | 289       | ~230       | −59 |
+|     | **Phase 4 full**                   | 295       | ~238       | −57 |
 
 Target after SHAP trim in Phase 2.5: **~110–140 features**.
 
@@ -1634,6 +1637,7 @@ v2.0-specific decisions, extending v1.0's log.
 | v2.38| **Phase 1.3-1.11 workflow: local-Claude implements, VPS Claude validates** | Workflow shift for the feature-engineering implementation phase (does not change §10.5 process discipline; explicitly preserves it). User approved Option A + per-feature verification + low-risk pilot. **Workflow:** local-Claude (the planner of Decision v2.37 audit) edits feature files locally with PROJECT_LOG citations per file; user pulls to VPS; VPS Claude runs `python -c "from <module> import …"` smoke tests + `pytest tests/` and surfaces any failure as CORRECTION lines in PROJECT_LOG (same pattern as Phase 1.1's .env-key-convention CORRECTION). **Discipline preserved:** local-Claude treats each file edit as an action requiring spec citation in PROJECT_LOG; banned phrases still apply; freeze gates unchanged; OOT-one-shot rule unchanged. **Why this is OK:** (a) implementation work follows v2.37-locked spec interpretation — no design judgment calls remaining; (b) VPS Claude retains validation/recon role — runtime check that local-Claude can't perform; (c) for any new ambiguity that surfaces during implementation, local-Claude raises a Deviation Request (same DR-NNN protocol as VPS Claude); (d) shorter loop than ping-ponging individual file edits to VPS. **Sequencing:** before ANY file edit, local-Claude delivers a per-feature KEEP/DROP/RENAME/ADD verification pass on `indicators.py` (proof of method); user reviews; then pilot the workflow cycle on a no-change file (`_common.py` or `candles.py`) to test the local-edit → user-pull → VPS-validate loop end-to-end; only after pilot passes, proceed to bigger files (builder.py, vwap.py, pivots.py, etc.). **Rollback:** if cycle breaks down or the validation layer surfaces too many runtime issues, revert to Option B (VPS Claude implements per audit). Decision v2.38 is the only spec-modification this workflow change requires. Approved by user 2026-04-27 | 2026-04-27 |
 | v2.39| **Cat 2 home: new `features/trend.py` (sub-decision under v2.37 Q4)**   | Local-Claude's `indicators.py` per-feature verification pass surfaced an inconsistency in v2.37's §15 edit: declaring `indicators.py` "MATH only — NO `_features` selection" left Cat 2 features (ADX zone flags + EMA dist + EMA stack + price-vs-EMA21-ATR = 14 features) without a clear home. Three options considered: (a) new `features/trend.py`, (b) put Cat 2 inside `momentum_core.py` (loose naming), (c) keep Cat 2 `_features` in `indicators.py` (walks back v2.37 Q4 strict math-only claim). User approved (a). **Resolution: new file `features/trend.py` for Cat 2 = 14 features.** Math (ADX/DI/EMA calc) stays in `indicators.py` as building blocks; selection lives in `trend.py`. Symmetric with `momentum_core.py` for Cat 1. Spec edits: §15 directory tree adds `trend.py # NEW: Cat 2 selection (14 features) per Decision v2.39 (sub of v2.37 Q4); imports adx_di + ema math from indicators.py`; Appendix A.1 NEW files list adds `features/trend.py`. Approved by user 2026-04-27 | 2026-04-27 |
 | v2.40| **Cat 1 implementation ambiguities Q6 + Q8 resolved**                   | Pre-`momentum_core.py` implementation surfaced 2 spec ambiguities in §7.2 Cat 1 (analogous to v2.37 Q5 ADX zone count). **(Q6) Velocity-of-velocity count = 4**: spec named only 2 (`d²rsi/dt²`, `d²macd/dt²`) but count was (4). Resolved option (a): one second-derivative per oscillator family — `d2_rsi`, `d2_macd_line`, `d2_wt1`, `d2_stoch_k`. **Distinction from MACD's `hist_acceleration`** is locked: `hist_acceleration` = d²(macd_hist) is in MACD's own 6-feature group; `d2_macd_line` = d²(macd_line) is in vel-of-vel group — different variables, no double-count. **(Q8) Cross-feature implementations**: `rsi_wt_divergence_flag` = `int(sign(rsi-50) ≠ sign(wt1))` — binary 0/1, 1 = oscillator regime disagreement; `macd_rsi_alignment` = `sign(macd_hist) × sign(rsi-50)` — signed −1/0/+1, +1 aligned. Both are minimal-interpretation extensions of spec language. Spec edits: §7.2 Cat 1 cross-feature line + velocity-of-velocity line rewritten to lock formulas explicitly (same pattern as v2.37 locking ADX zone flags). Approved by user 2026-04-27 | 2026-04-27 |
+| v2.41| **Cat 22 implementation: ETH dropped (Q9) + ATR-norm difference (Q10)** | Pre-`cross_asset.py` implementation surfaced 2 ambiguities. **(Q9) ETH correlation DROPPED entirely from Cat 22.** Original §7.2 Cat 22 listed 8 features (6 v1.0 + 2 NEW); ETH correlation was 1 of the 2 NEW. Reasoning for drop: (a) ETH is not a v2.0 trade asset (Decision v2.35 locked universe at BTC/SOL/LINK), so ETH correlation would only serve as a signal-source feature for SOL/LINK predictions; (b) ETH adds another asset to fetch + maintain — scope creep beyond v2.35; (c) BTC correlation already captures the bulk of cross-asset signal — ETH's marginal lift doesn't justify the cost; (d) Phase 4 has asset-universe expansion as natural place to revisit if needed. **Cat 22 final size: 7 features** (6 in Phase 1 + 1 BTC funding in Phase 3+). Feature count cascade: Cat 22 (8→7) → Phase 1 total (~202→~201), Phase 3 total (~231→~230), Phase 4 full (~239→~238). **(Q10) BTC ATR-normalized move formula = difference**: `btc_vs_asset_atr_norm_diff = (btc_move/atr_btc) − (asset_move/atr_asset)`. Signed signal: positive = BTC led in vol-adjusted units, negative = asset led / decoupled alt strength, near-zero = synchronized. Difference chosen over ratio (unstable when btc_move≈0) and signed product (loses magnitude). Spec edits: §7.2 Cat 22 (ETH line removed; remaining 7 features explicitly named with column conventions; ATR-norm-diff formula locked); §7.3 feature count summary (Cat 22 row 8→7, Phase 1/3/4 totals updated). Approved by user 2026-04-28 | 2026-04-28 |
 
 ---
 
