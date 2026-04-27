@@ -566,15 +566,20 @@ Keep all v1.0, signs normalized to +1 bullish / −1 bearish (the fix from v1.0 
 **Drop:**
 - Low-importance money flow oscillator variants
 
-#### Category 15 — Additional Momentum (9 → 6 features)
+#### Category 15 — Additional Momentum (9 → 7 features)
 
-**Keep:**
-- Williams %R(14) value and zone (2)
-- CCI(20) value and zero-cross state (2)
-- TSI long/short signal cross state (1)
-- CMO(14) zero-cross state (1)
+**Keep (7 — formulas locked per Decision v2.42 Q11):**
+- `williams_r` — Williams %R(14) value (1)
+- `williams_r_zone` — +1 OB (WR > -20) / -1 OS (WR < -80) / 0 mid (1)
+- `cci_20` — CCI(20) value (1)
+- `cci_zero_cross_state` — `sign(cci_20)`; +1 above zero, -1 below (1)
+- `tsi_signal_cross_state` — `sign(tsi - tsi_signal)` where `tsi_signal = tsi.ewm(span=7).mean()`; momentum acceleration trigger (Decision v2.42 Q11 option a) (1)
+- `tsi_zero_cross_state` — `sign(tsi)`; directional regime (Decision v2.42 Q11 added "keep both") (1)
+- `cmo_zero_cross_state` — `sign(cmo_14)` (1)
 
-**Drop:**
+**Drop from v1.0:**
+- `williams_r_direction`, `cci_direction`, `cci_extreme`, `cmo_direction`, `cmo_14` raw value, raw `tsi` value
+- `roc_10` — overlaps with Cat 1 multi-period momentum (`roc_1bar`/`roc_3bar`/`roc_6bar`/`roc_12bar`)
 - Redundant oscillators that duplicate RSI/Stoch from Category 1
 
 #### Category 16 — Market Structure (10 → 10, unchanged)
@@ -683,7 +688,7 @@ Per user's memory: BTC correlation is a **booster, not filter**. Independent alt
 | 12  | Lagged Dynamics                    | 8         | 5          | −3  |
 | 13  | Divergence Detection               | 7         | 7          | 0   |
 | 14  | Money Flow                         | 8         | 6          | −2  |
-| 15  | Additional Momentum                | 9         | 6          | −3  |
+| 15  | Additional Momentum                | 9         | 7          | −2  |
 | 16  | Market Structure                   | 10        | 10         | 0   |
 | 17  | Statistical / Fractal              | 9         | 6          | −3  |
 | 18  | Adaptive MAs                       | 5         | 4          | −1  |
@@ -691,9 +696,9 @@ Per user's memory: BTC correlation is a **booster, not filter**. Independent alt
 | 20  | Event Memory                       | 41        | 22         | −19 |
 | 21  | Microstructure (Hyperliquid)       | 21        | 21         | 0   |
 | 22  | Cross-Asset Correlation            | 6         | 7          | +1  |
-|     | **Phase 1 total (ex 21, 22-BTC)** | **268**   | **~201**   | −67 |
-|     | **Phase 3 total**                  | 289       | ~230       | −59 |
-|     | **Phase 4 full**                   | 295       | ~238       | −57 |
+|     | **Phase 1 total (ex 21, 22-BTC)** | **268**   | **~202**   | −66 |
+|     | **Phase 3 total**                  | 289       | ~231       | −58 |
+|     | **Phase 4 full**                   | 295       | ~239       | −56 |
 
 Target after SHAP trim in Phase 2.5: **~110–140 features**.
 
@@ -1638,6 +1643,7 @@ v2.0-specific decisions, extending v1.0's log.
 | v2.39| **Cat 2 home: new `features/trend.py` (sub-decision under v2.37 Q4)**   | Local-Claude's `indicators.py` per-feature verification pass surfaced an inconsistency in v2.37's §15 edit: declaring `indicators.py` "MATH only — NO `_features` selection" left Cat 2 features (ADX zone flags + EMA dist + EMA stack + price-vs-EMA21-ATR = 14 features) without a clear home. Three options considered: (a) new `features/trend.py`, (b) put Cat 2 inside `momentum_core.py` (loose naming), (c) keep Cat 2 `_features` in `indicators.py` (walks back v2.37 Q4 strict math-only claim). User approved (a). **Resolution: new file `features/trend.py` for Cat 2 = 14 features.** Math (ADX/DI/EMA calc) stays in `indicators.py` as building blocks; selection lives in `trend.py`. Symmetric with `momentum_core.py` for Cat 1. Spec edits: §15 directory tree adds `trend.py # NEW: Cat 2 selection (14 features) per Decision v2.39 (sub of v2.37 Q4); imports adx_di + ema math from indicators.py`; Appendix A.1 NEW files list adds `features/trend.py`. Approved by user 2026-04-27 | 2026-04-27 |
 | v2.40| **Cat 1 implementation ambiguities Q6 + Q8 resolved**                   | Pre-`momentum_core.py` implementation surfaced 2 spec ambiguities in §7.2 Cat 1 (analogous to v2.37 Q5 ADX zone count). **(Q6) Velocity-of-velocity count = 4**: spec named only 2 (`d²rsi/dt²`, `d²macd/dt²`) but count was (4). Resolved option (a): one second-derivative per oscillator family — `d2_rsi`, `d2_macd_line`, `d2_wt1`, `d2_stoch_k`. **Distinction from MACD's `hist_acceleration`** is locked: `hist_acceleration` = d²(macd_hist) is in MACD's own 6-feature group; `d2_macd_line` = d²(macd_line) is in vel-of-vel group — different variables, no double-count. **(Q8) Cross-feature implementations**: `rsi_wt_divergence_flag` = `int(sign(rsi-50) ≠ sign(wt1))` — binary 0/1, 1 = oscillator regime disagreement; `macd_rsi_alignment` = `sign(macd_hist) × sign(rsi-50)` — signed −1/0/+1, +1 aligned. Both are minimal-interpretation extensions of spec language. Spec edits: §7.2 Cat 1 cross-feature line + velocity-of-velocity line rewritten to lock formulas explicitly (same pattern as v2.37 locking ADX zone flags). Approved by user 2026-04-27 | 2026-04-27 |
 | v2.41| **Cat 22 implementation: ETH dropped (Q9) + ATR-norm difference (Q10)** | Pre-`cross_asset.py` implementation surfaced 2 ambiguities. **(Q9) ETH correlation DROPPED entirely from Cat 22.** Original §7.2 Cat 22 listed 8 features (6 v1.0 + 2 NEW); ETH correlation was 1 of the 2 NEW. Reasoning for drop: (a) ETH is not a v2.0 trade asset (Decision v2.35 locked universe at BTC/SOL/LINK), so ETH correlation would only serve as a signal-source feature for SOL/LINK predictions; (b) ETH adds another asset to fetch + maintain — scope creep beyond v2.35; (c) BTC correlation already captures the bulk of cross-asset signal — ETH's marginal lift doesn't justify the cost; (d) Phase 4 has asset-universe expansion as natural place to revisit if needed. **Cat 22 final size: 7 features** (6 in Phase 1 + 1 BTC funding in Phase 3+). Feature count cascade: Cat 22 (8→7) → Phase 1 total (~202→~201), Phase 3 total (~231→~230), Phase 4 full (~239→~238). **(Q10) BTC ATR-normalized move formula = difference**: `btc_vs_asset_atr_norm_diff = (btc_move/atr_btc) − (asset_move/atr_asset)`. Signed signal: positive = BTC led in vol-adjusted units, negative = asset led / decoupled alt strength, near-zero = synchronized. Difference chosen over ratio (unstable when btc_move≈0) and signed product (loses magnitude). Spec edits: §7.2 Cat 22 (ETH line removed; remaining 7 features explicitly named with column conventions; ATR-norm-diff formula locked); §7.3 feature count summary (Cat 22 row 8→7, Phase 1/3/4 totals updated). Approved by user 2026-04-28 | 2026-04-28 |
+| v2.42| **Cat 15 implementation: TSI keeps BOTH cross states (Q11)**            | Pre-`extra_momentum.py` implementation surfaced ambiguity in §7.2 Cat 15: "TSI long/short signal cross state (1)" could mean (a) TSI vs signal-line cross or (b) TSI zero-cross. User chose **"keep both"**: orthogonal information — `tsi_signal_cross_state` captures momentum acceleration (TSI vs EMA(7) signal line), `tsi_zero_cross_state` captures directional regime (TSI sign). Both inexpensive (single line of code each, ~0.5% incremental sample/feature ratio cost at ~1,100:1). SHAP trim in Phase 2.6 retains whichever is more predictive. **Cat 15 final size: 7 features** (was spec'd at 6). Feature count cascade: Cat 15 (6→7) → Phase 1 total (~201→~202), Phase 3 total (~230→~231), Phase 4 full (~238→~239) — restores totals to pre-v2.41 levels (Cat 22 −1 cancelled by Cat 15 +1). Spec edits: §7.2 Cat 15 (7 features explicitly enumerated with column conventions; both TSI formulas locked; specific drops from v1.0 listed including roc_10 overlap with Cat 1); §7.3 feature count summary (Cat 15 row 6→7, Phase 1/3/4 totals reverted to ~202/~231/~239). Approved by user 2026-04-28 | 2026-04-28 |
 
 ---
 

@@ -37,15 +37,16 @@ CURRENT TAGGING SCOPE:
     Cat 22  ( 7 features, 1 override) — cross_asset.py
   Phase 1.10b (modify-in-place trims, lands per file):
     Cat 3   (12 features) — volatility.py    [v2.0 trim 15→12]
-  Total currently tagged: 83 features.
+    Cat 15  ( 7 features) — extra_momentum.py [v2.0 trim 9→7 per Decision v2.42 Q11]
+  Total currently tagged: 90 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
     Cat 4 volume, Cat 5 vwap, Cat 6 pivots (+ 6.2/6.4),
     Cat 6.5 swing fib retracements, Cat 7 sessions, Cat 8 candles,
     Cat 9 stats, Cat 10 regime, Cat 11 context, Cat 12 lagged, Cat 13
-    divergence, Cat 14 money flow, Cat 15 extra momentum, Cat 16 structure,
-    Cat 17 fractal, Cat 18 adaptive MA, Cat 19 ichimoku, Cat 20 event memory.
+    divergence, Cat 14 money flow, Cat 16 structure, Cat 17 fractal,
+    Cat 18 adaptive MA, Cat 19 ichimoku, Cat 20 event memory.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
 from __future__ import annotations
@@ -139,10 +140,22 @@ _CAT_3_DYNAMIC = [
 ]
 
 
+# ─── Cat 15 — Additional Momentum (7 features, all dynamic) ──────────────
+# Per §7.2 Cat 15 trim 9→7 + Decision v2.42 Q11 (both TSI cross states kept).
+# Implemented in features/extra_momentum.py. All 7 mutate intrabar (oscillator
+# values + sign flips that follow them).
+_CAT_15_DYNAMIC = [
+    "williams_r", "williams_r_zone",
+    "cci_20", "cci_zero_cross_state",
+    "tsi_signal_cross_state", "tsi_zero_cross_state",
+    "cmo_zero_cross_state",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
-for f in _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC:
+for f in _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC + _CAT_15_DYNAMIC:
     FEATURE_STABILITY[f] = "dynamic"
 
 for f in _CAT_2A_STATIC + _CAT_22_STATIC_OVERRIDE:
@@ -162,7 +175,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/15/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
