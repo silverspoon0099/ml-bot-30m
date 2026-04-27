@@ -29,24 +29,24 @@ This taxonomy pays off in Phase 4 intrabar scout: reads only `static` +
 confirmed-`mixed` features plus fresh 5m bar-close values of selected
 `dynamic` features.
 
-CURRENT TAGGING SCOPE (Phase 1.10a):
-  Tags are LOCKED for the 4 NEW algorithm files implemented per
-  Decisions v2.37/v2.39/v2.40/v2.41:
+CURRENT TAGGING SCOPE:
+  Phase 1.10a (NEW algorithm files, Decisions v2.37/v2.39/v2.40/v2.41):
     Cat 1   (32 features) — momentum_core.py
     Cat 2   (14 features) — trend.py
     Cat 2a  (18 features) — htf_context.py
     Cat 22  ( 7 features, 1 override) — cross_asset.py
-  Total currently tagged: 71 features.
+  Phase 1.10b (modify-in-place trims, lands per file):
+    Cat 3   (12 features) — volatility.py    [v2.0 trim 15→12]
+  Total currently tagged: 83 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
-lands in Phase 1.10b):
-    Cat 3   volatility, Cat 4 volume, Cat 5 vwap, Cat 6 pivots (+ 6.2/6.4),
+lands):
+    Cat 4 volume, Cat 5 vwap, Cat 6 pivots (+ 6.2/6.4),
     Cat 6.5 swing fib retracements, Cat 7 sessions, Cat 8 candles,
     Cat 9 stats, Cat 10 regime, Cat 11 context, Cat 12 lagged, Cat 13
     divergence, Cat 14 money flow, Cat 15 extra momentum, Cat 16 structure,
     Cat 17 fractal, Cat 18 adaptive MA, Cat 19 ichimoku, Cat 20 event memory.
-  Each file edit will append to FEATURE_STABILITY at the same time as the
-  feature names lock.
+  Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
 from __future__ import annotations
 
@@ -121,10 +121,28 @@ _CAT_22_DYNAMIC = [
 _CAT_22_STATIC_OVERRIDE = ["btc_above_ema200_daily"]
 
 
+# ─── Cat 3 — Volatility (12 features, all dynamic) ───────────────────────
+# Per §7.2 Cat 3 trim 14→12. Implemented in features/volatility.py.
+# All 12 features mutate intrabar:
+#   - ATR (Wilder smoothing) updates on every new high/low/close
+#   - BB rolling stats (mean, std) update with current close
+#   - bb_position depends on current close
+#   - Keltner channels update with TR
+#   - squeeze_state (-1/0/+1) toggles intrabar based on BB-vs-KC at current bar
+_CAT_3_DYNAMIC = [
+    # ATR family (4)
+    "atr_14", "atr_5", "atr_ratio", "atr_percentile",
+    # BB family (5)
+    "bb_basis", "bb_upper", "bb_lower", "bb_width_pct", "bb_position",
+    # KC + squeeze (3)
+    "kc_upper", "kc_lower", "squeeze_state",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
-for f in _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC:
+for f in _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC:
     FEATURE_STABILITY[f] = "dynamic"
 
 for f in _CAT_2A_STATIC + _CAT_22_STATIC_OVERRIDE:
@@ -143,9 +161,8 @@ def get_stability(feature_name: str) -> Stability:
     if feature_name not in FEATURE_STABILITY:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
-            f"Phase 1.10a tagged Cat 1/2/2a/22 only ({len(FEATURE_STABILITY)} "
-            f"features). Other categories will be added as their files are "
-            f"rewritten in Phase 1.10b."
+            f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
+            f"1/2/2a/3/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
