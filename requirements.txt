@@ -41,3 +41,4 @@ python-dotenv>=1.0.0          # load .env into os.environ
 # Development
 ipykernel>=6.27.0
 jupyter>=1.0.0
+pytest>=8.0
