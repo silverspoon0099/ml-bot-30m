@@ -38,14 +38,15 @@ CURRENT TAGGING SCOPE:
   Phase 1.10b (modify-in-place trims, lands per file):
     Cat 3   (12 features) — volatility.py    [v2.0 trim 15→12]
     Cat 15  ( 7 features) — extra_momentum.py [v2.0 trim 9→7 per Decision v2.42 Q11]
-  Total currently tagged: 90 features.
+    Cat 13  ( 7 features) — divergence.py    [v2.0 reshape 7→7 strict spec per Decision v2.43 Q12]
+  Total currently tagged: 97 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
     Cat 4 volume, Cat 5 vwap, Cat 6 pivots (+ 6.2/6.4),
     Cat 6.5 swing fib retracements, Cat 7 sessions, Cat 8 candles,
-    Cat 9 stats, Cat 10 regime, Cat 11 context, Cat 12 lagged, Cat 13
-    divergence, Cat 14 money flow, Cat 16 structure, Cat 17 fractal,
+    Cat 9 stats, Cat 10 regime, Cat 11 context, Cat 12 lagged,
+    Cat 14 money flow, Cat 16 structure, Cat 17 fractal,
     Cat 18 adaptive MA, Cat 19 ichimoku, Cat 20 event memory.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
@@ -152,10 +153,27 @@ _CAT_15_DYNAMIC = [
 ]
 
 
+# ─── Cat 13 — Divergence Detection (7 features, all dynamic) ─────────────
+# Per §7.2 Cat 13 + Decision v2.43 Q12 (strict spec: split bullish/bearish
+# binary flags, drop WT/Stoch divs). Implemented in features/divergence.py.
+# All 7 dynamic — divergence flags depend on the most recent confirmed
+# fractal pivot, which can fire/cancel as new bars close. Recency is also
+# dynamic (counter ticks forward each bar, resets on new divergence).
+_CAT_13_DYNAMIC = [
+    "regular_bullish_div_rsi", "regular_bearish_div_rsi",
+    "regular_bullish_div_macd", "regular_bearish_div_macd",
+    "hidden_bullish_div_rsi", "hidden_bearish_div_rsi",
+    "divergence_recency",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
-for f in _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC + _CAT_15_DYNAMIC:
+for f in (
+    _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC
+    + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC
+):
     FEATURE_STABILITY[f] = "dynamic"
 
 for f in _CAT_2A_STATIC + _CAT_22_STATIC_OVERRIDE:
@@ -175,7 +193,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/15/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/13/15/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
