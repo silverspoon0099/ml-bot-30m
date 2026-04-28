@@ -39,14 +39,15 @@ CURRENT TAGGING SCOPE:
     Cat 3   (12 features) — volatility.py    [v2.0 trim 15→12]
     Cat 15  ( 7 features) — extra_momentum.py [v2.0 trim 9→7 per Decision v2.42 Q11]
     Cat 13  ( 7 features) — divergence.py    [v2.0 reshape 7→7 strict spec per Decision v2.43 Q12]
-  Total currently tagged: 97 features.
+    Cat 4   (12 features) — volume.py         [v2.0 trim 17→12]
+    Cat 14  ( 6 features) — volume.py (`money_flow_features`) [v2.0 trim 8→6]
+  Total currently tagged: 115 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
-    Cat 4 volume, Cat 5 vwap, Cat 6 pivots (+ 6.2/6.4),
-    Cat 6.5 swing fib retracements, Cat 7 sessions, Cat 8 candles,
-    Cat 9 stats, Cat 10 regime, Cat 11 context, Cat 12 lagged,
-    Cat 14 money flow, Cat 16 structure, Cat 17 fractal,
+    Cat 5 vwap, Cat 6 pivots (+ 6.2/6.4), Cat 6.5 swing fib retracements,
+    Cat 7 sessions, Cat 8 candles, Cat 9 stats, Cat 10 regime,
+    Cat 11 context, Cat 12 lagged, Cat 16 structure, Cat 17 fractal,
     Cat 18 adaptive MA, Cat 19 ichimoku, Cat 20 event memory.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
@@ -167,12 +168,51 @@ _CAT_13_DYNAMIC = [
 ]
 
 
+# ─── Cat 4 — Volume / Buy-Sell Pressure (12 features, all dynamic) ───────
+# Per §7.2 Cat 4 trim 17→12. Implemented in features/volume.py.
+# All 12 mutate intrabar:
+#   - volume rolling stats update with current bar's volume
+#   - VFI uses current bar in cumulative + rolling
+#   - OBV is cumulative (updates each bar); slope mutates with new bars
+#   - obv_divergence_flag depends on most recent fractal pivot
+#   - candle_buy_sell_signed depends on current close vs current bar's range
+#   - volume_weighted_momentum_10 includes current bar's return × volume
+#   - high_vol_close_*_tercile depends on current bar's volume + close position
+_CAT_4_DYNAMIC = [
+    # Volume statistics (3)
+    "volume_ratio_20", "volume_zscore_20", "volume_spike_flag",
+    # VFI block (3)
+    "vfi", "vfi_signal", "vfi_hist_slope",
+    # OBV block (2)
+    "obv_slope", "obv_divergence_flag",
+    # Buy/sell estimator (1)
+    "candle_buy_sell_signed",
+    # Volume-weighted momentum (1)
+    "volume_weighted_momentum_10",
+    # High-volume-candle location (2)
+    "high_vol_close_top_tercile", "high_vol_close_bottom_tercile",
+]
+
+
+# ─── Cat 14 — Money Flow (6 features, all dynamic) ───────────────────────
+# Per §7.2 Cat 14 trim 8→6. Implemented in features/volume.py
+# (`money_flow_features` function). All 6 mutate intrabar:
+#   - CMF rolling sum updates each bar
+#   - MFI rolling sum updates; zone derives from current MFI value
+#   - A/D is cumulative; slope mutates; divergence flag depends on pivots
+_CAT_14_DYNAMIC = [
+    "cmf_20", "cmf_slope",
+    "mfi_14", "mfi_zone",
+    "ad_slope_10", "ad_price_divergence_flag",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
 for f in (
     _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC
-    + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC
+    + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC + _CAT_4_DYNAMIC + _CAT_14_DYNAMIC
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
@@ -193,7 +233,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/13/15/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/13/14/15/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
