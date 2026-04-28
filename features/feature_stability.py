@@ -42,11 +42,11 @@ CURRENT TAGGING SCOPE:
     Cat 4   (12 features) — volume.py         [v2.0 trim 17→12]
     Cat 14  ( 6 features) — volume.py (`money_flow_features`) [v2.0 trim 8→6]
     Cat 5   (14 features) — vwap.py           [v2.0 multi-anchor expand 8→14 per Decision v2.44]
-  Total currently tagged: 129 features.
+    Cat 6   (30 features) — pivots.py         [v2.0 expand 13→30, sub-cats 6.1–6.5 per Decision v2.45]
+  Total currently tagged: 159 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
-    Cat 6 pivots (+ 6.2/6.4), Cat 6.5 swing fib retracements,
     Cat 7 sessions, Cat 8 candles, Cat 9 stats, Cat 10 regime,
     Cat 11 context, Cat 12 lagged, Cat 16 structure, Cat 17 fractal,
     Cat 18 adaptive MA, Cat 19 ichimoku, Cat 20 event memory.
@@ -234,6 +234,42 @@ _CAT_5_DYNAMIC = [
 ]
 
 
+# ─── Cat 6 — S/R Structure (30 features, all static per §7.5) ────────────
+# Per §7.2 Cat 6 sub-categories 6.1–6.5 + Decisions v2.17–v2.19 + v2.45 (Q14
+# implementation choices). Implemented in features/pivots.py.
+# §7.5 explicit: "Cat 6 all pivots — fixed for the day/week" + "Cat 6.5
+# swing Fib retracement levels — only update when a new swing pivot
+# confirms". Position features depend on close, but the LEVELS (which the
+# positions reference) are static — intrabar-safe for cached lookup.
+_CAT_6_STATIC = [
+    # 6.1 Daily Fib-pivots (9 per Q14.1)
+    "pivot_S3_dist_pct", "pivot_S2_dist_pct", "pivot_S1_dist_pct",
+    "pivot_P_dist_pct",
+    "pivot_R1_dist_pct", "pivot_R2_dist_pct", "pivot_R3_dist_pct",
+    "pivot_zone", "pivot_times_tested_today",
+    # 6.2 Daily NEW (3)
+    "pivot_position_daily_01",
+    "dist_to_nearest_pivot_atr",
+    "daily_pivot_weekly_pivot_confluence",
+    # 6.3 Weekly Fib-pivots (9, mirror of 6.1)
+    "weekly_pivot_S3_dist_pct", "weekly_pivot_S2_dist_pct",
+    "weekly_pivot_S1_dist_pct", "weekly_pivot_P_dist_pct",
+    "weekly_pivot_R1_dist_pct", "weekly_pivot_R2_dist_pct",
+    "weekly_pivot_R3_dist_pct",
+    "weekly_pivot_zone", "weekly_pivot_times_tested_this_week",
+    # 6.4 Weekly NEW (2)
+    "pivot_position_weekly_01",
+    "dist_to_nearest_weekly_pivot_atr",
+    # 6.5 Swing Fib retracements (7)
+    "fib_retracement_pct",
+    "in_golden_pocket",
+    "nearest_fib_level_dist",
+    "fib_touches_382", "fib_touches_618",
+    "extension_progress_1272",
+    "swing_fib_pivot_confluence",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
@@ -244,7 +280,7 @@ for f in (
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
-for f in _CAT_2A_STATIC + _CAT_22_STATIC_OVERRIDE:
+for f in _CAT_2A_STATIC + _CAT_22_STATIC_OVERRIDE + _CAT_6_STATIC:
     FEATURE_STABILITY[f] = "static"
 
 
@@ -261,7 +297,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/5/13/14/15/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/6/13/14/15/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 

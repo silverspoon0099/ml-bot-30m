@@ -243,8 +243,13 @@ def vwap_features(
         ).sum()
     touches_df = pd.DataFrame(touches_dict)
 
-    # Identify which VWAP has max touches at each bar
-    heavy_name = touches_df.idxmax(axis=1)  # ties: first column wins (acceptable)
+    # Identify which VWAP has max touches at each bar.
+    # fillna(0) before idxmax: pandas 3.x will raise ValueError on all-NaN
+    # rows (warmup before heavy_lookback bars). Filling with 0 means idxmax
+    # returns the first column for warmup rows; the no_leader mask below
+    # then sets heavy_vwap_value to NaN, so the flag becomes 0 for warmup —
+    # behavior preserved across pandas versions, no FutureWarning.
+    heavy_name = touches_df.fillna(0).idxmax(axis=1)  # ties: first column wins
 
     # Map heavy name → corresponding VWAP value
     heavy_vwap_value = pd.Series(np.nan, index=close.index)

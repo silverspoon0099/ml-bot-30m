@@ -1,224 +1,381 @@
-"""Cat 6 — Pivot Fibonacci S/R (13 features).
+"""Cat 6 — S/R Structure (30 features) — v2.0.
 
-Daily Fibonacci pivots:
+Per Project Spec 30min §7.2 Cat 6 + Decisions v2.17–v2.19 (Fib expansions)
++ Decision v2.45 (Q14.1–Q14.4 implementation choices locked).
+
+30 features = 9 (6.1 daily) + 3 (6.2 daily NEW) + 9 (6.3 weekly)
+            + 2 (6.4 weekly NEW) + 7 (6.5 swing-Fib retracements).
+
+DAILY FIB-PIVOTS (Standard Fibonacci pivot math):
     P  = (prev_H + prev_L + prev_C) / 3
-    R1 = P + 0.382 * (prev_H - prev_L)
-    R2 = P + 0.618 * (prev_H - prev_L)
-    R3 = P + 1.000 * (prev_H - prev_L)
-    S1 = P - 0.382 * range
-    S2 = P - 0.618 * range
-    S3 = P - 1.000 * range
+    R1 = P + 0.382 × (prev_H − prev_L)
+    R2 = P + 0.618 × (prev_H − prev_L)
+    R3 = P + 1.000 × (prev_H − prev_L)
+    S1 = P − 0.382 × range
+    S2 = P − 0.618 × range
+    S3 = P − 1.000 × range
 
-Context: which level is nearest, which zone, approach direction & speed,
-how many times the level was tested today.
+WEEKLY FIB-PIVOTS: same math, weekly OHLC, anchor Monday 00:00 UTC.
+
+SWING FIB RETRACEMENTS (Cat 6.5):
+    swing_high, swing_low = forward-filled most recent confirmed fractal
+                            pivots (lookback=5, 2-left-2-right rule)
+    swing_range = swing_high − swing_low
+    fib_retracement_pct = (close − swing_low) / swing_range
+
+§7.5 TAGGING: All 30 features are `static` — pivot LEVELS are fixed for the
+day/week (don't update intrabar); swing Fib levels only update on new
+confirmed pivot. Position features (dist_pct, zone) depend on close but
+are re-derivable each tick from cached static levels — intrabar-safe.
+
+CALLER-SUPPLIED INPUTS:
+    df    — DataFrame with open/high/low/close/volume + DatetimeIndex
+    atr_14 — ATR(14) Series (from volatility.py output)
+    cfg   — feature config dict
+
+ROLLBACK: see PROJECT_LOG Decision v2.45 entry for v1.0→v2.0 transformation.
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from ._common import pct
+from ._common import pct, safe_div
+from .divergence import fractal_pivots
 
 
 PIVOT_NAMES = ["S3", "S2", "S1", "P", "R1", "R2", "R3"]
+FIB_LEVELS = [0.382, 0.5, 0.618, 0.786]
 
 
-def daily_pivots(df_daily: pd.DataFrame) -> pd.DataFrame:
-    """Compute next-day's pivot levels from each completed day. Returns one row per day."""
-    prev = df_daily.shift(1)
-    rng = prev["high"] - prev["low"]
-    p = (prev["high"] + prev["low"] + prev["close"]) / 3.0
-    out = pd.DataFrame(
-        {
-            "pivot_S3": p - 1.000 * rng,
-            "pivot_S2": p - 0.618 * rng,
-            "pivot_S1": p - 0.382 * rng,
-            "pivot_P": p,
-            "pivot_R1": p + 0.382 * rng,
-            "pivot_R2": p + 0.618 * rng,
-            "pivot_R3": p + 1.000 * rng,
-        },
-        index=df_daily.index,
-    )
-    return out
+# ─── Pivot level math ────────────────────────────────────────────────────
+def _fib_pivots_from_ohlc(prev_high: pd.Series, prev_low: pd.Series, prev_close: pd.Series) -> pd.DataFrame:
+    """Standard Fibonacci pivots from prior-period OHLC.
 
-
-def weekly_pivots(df_weekly: pd.DataFrame) -> pd.DataFrame:
-    """Fibonacci pivots from each completed week, applied to the *next* week.
-
-    Week boundary is Monday 00:00 UTC. Prior-week H/L/C → current-week levels
-    (via shift-1 after weekly resample).
+    Returns DataFrame with columns S3, S2, S1, P, R1, R2, R3 indexed
+    same as inputs.
     """
-    prev = df_weekly.shift(1)
-    rng = prev["high"] - prev["low"]
-    p = (prev["high"] + prev["low"] + prev["close"]) / 3.0
+    rng = prev_high - prev_low
+    p = (prev_high + prev_low + prev_close) / 3.0
     return pd.DataFrame(
         {
-            "weekly_pivot_S3": p - 1.000 * rng,
-            "weekly_pivot_S2": p - 0.618 * rng,
-            "weekly_pivot_S1": p - 0.382 * rng,
-            "weekly_pivot_P": p,
-            "weekly_pivot_R1": p + 0.382 * rng,
-            "weekly_pivot_R2": p + 0.618 * rng,
-            "weekly_pivot_R3": p + 1.000 * rng,
-        },
-        index=df_weekly.index,
+            "S3": p - 1.000 * rng,
+            "S2": p - 0.618 * rng,
+            "S1": p - 0.382 * rng,
+            "P":  p,
+            "R1": p + 0.382 * rng,
+            "R2": p + 0.618 * rng,
+            "R3": p + 1.000 * rng,
+        }
     )
 
 
-def weekly_pivot_features(df_5m: pd.DataFrame, week_id: pd.Series, tolerance_pct: float) -> pd.DataFrame:
-    """Weekly-reset Fibonacci pivots (Monday 00:00 UTC boundary), applied on 5m frame.
+def _aggregate_period(df: pd.DataFrame, group_id: pd.Series) -> pd.DataFrame:
+    """Group OHLC by period (day or week), return per-period OHLC frame."""
+    return df.groupby(group_id).agg(
+        open=("open", "first"),
+        high=("high", "max"),
+        low=("low", "min"),
+        close=("close", "last"),
+    )
 
-    Mirrors pivot_features() but at weekly resolution. Levels are stable across the
-    week; distance/zone/approach features still reflect per-bar 5m price action.
+
+def _compute_pivot_levels_mapped(
+    df: pd.DataFrame, group_id: pd.Series
+) -> pd.DataFrame:
+    """Compute prior-period pivots and broadcast onto df.index.
+
+    Returns DataFrame with 7 columns (named per PIVOT_NAMES) indexed like df.
+    For each row, the values are the pivots computed from THE PREVIOUS
+    completed period's OHLC (no look-ahead).
     """
-    if getattr(week_id.dtype, "tz", None) is not None:
-        week_id = week_id.dt.tz_localize(None)
-
-    weekly = df_5m.groupby(week_id).agg(
-        open=("open", "first"), high=("high", "max"), low=("low", "min"), close=("close", "last")
+    period_ohlc = _aggregate_period(df, group_id)
+    period_pivots = _fib_pivots_from_ohlc(
+        period_ohlc["high"].shift(1),
+        period_ohlc["low"].shift(1),
+        period_ohlc["close"].shift(1),
     )
-    pivots_weekly = weekly_pivots(weekly)
-    mapped = pivots_weekly.loc[week_id.values].set_index(df_5m.index)
+    # Map each row's pivots based on which period it belongs to
+    mapped = period_pivots.loc[group_id.values].set_axis(df.index)
+    mapped.columns = PIVOT_NAMES
+    return mapped
 
-    close = df_5m["close"]
-    cols = [f"weekly_pivot_{n}" for n in PIVOT_NAMES]
-    levels = mapped[cols]
 
-    abs_dist = (levels.sub(close, axis=0)).abs()
-    nearest_idx = abs_dist.values.argmin(axis=1)
-    nearest_dist = np.take_along_axis(abs_dist.values, nearest_idx[:, None], axis=1).ravel()
-    dist_pct = (nearest_dist / close.replace(0, np.nan)) * 100.0
+# ─── Per-level dist_pct + zone + times_tested helpers ────────────────────
+def _level_dist_pcts(close: pd.Series, levels: pd.DataFrame) -> pd.DataFrame:
+    """Signed % distance from close to each of 7 levels."""
+    return levels.apply(lambda lvl: pct(close - lvl, close))
 
-    arr = levels.values
-    zone = np.full(len(close), -1, dtype=float)
+
+def _zone_categorical(close: pd.Series, levels: pd.DataFrame) -> pd.Series:
+    """Categorical 0..5 zone (v1.0 convention preserved):
+        0 if close ≤ S3, 5 if close ≥ R3, else interval index.
+    """
+    arr = levels.values  # (n, 7) sorted S3<S2<S1<P<R1<R2<R3
     closes = close.values
-    for i in range(len(close)):
+    n = len(close)
+    zone = np.full(n, np.nan)
+    for i in range(n):
         row = arr[i]
         if np.isnan(row).any():
             continue
-        if closes[i] <= row[0]:
+        c = closes[i]
+        if c <= row[0]:
             zone[i] = 0
-        elif closes[i] >= row[-1]:
+        elif c >= row[-1]:
             zone[i] = 5
         else:
             for z in range(6):
-                if row[z] <= closes[i] < row[z + 1]:
+                if row[z] <= c < row[z + 1]:
                     zone[i] = z
                     break
-
-    nearest_level = np.take_along_axis(arr, nearest_idx[:, None], axis=1).ravel()
-    nearest_level_s = pd.Series(nearest_level, index=close.index)
-    diff = close - nearest_level_s
-    diff_prev = diff.shift(1)
-    approaching = diff.abs() < diff_prev.abs()
-    direction = np.where(diff > 0, 1, -1)
-    approach_dir = pd.Series(np.where(approaching, direction, 0), index=close.index)
-    approach_speed = (close - close.shift(3)).abs() / close * 100
-
-    tol = tolerance_pct / 100.0
-    touched = ((close - nearest_level_s).abs() <= nearest_level_s * tol).astype(int)
-    times_tested = touched.groupby(week_id).cumsum()
-
-    return pd.concat(
-        [
-            mapped.reset_index(drop=True).set_index(df_5m.index),
-            pd.DataFrame(
-                {
-                    "dist_to_nearest_weekly_pivot_pct": dist_pct,
-                    "nearest_weekly_pivot_type": nearest_idx,
-                    "weekly_pivot_zone": zone,
-                    "weekly_pivot_approach_dir": approach_dir,
-                    "weekly_pivot_approach_speed": approach_speed,
-                    "weekly_pivot_times_tested_this_week": times_tested,
-                },
-                index=close.index,
-            ),
-        ],
-        axis=1,
-    )
+    return pd.Series(zone, index=close.index)
 
 
-def pivot_features(df_5m: pd.DataFrame, day_id: pd.Series, tolerance_pct: float) -> pd.DataFrame:
-    """Compute all pivot features on the 5min frame.
-
-    Daily pivots are computed from prior-day OHLC then mapped to today's bars.
+def _times_tested_in_period(
+    close: pd.Series, levels: pd.DataFrame, period_id: pd.Series, tolerance_pct: float
+) -> pd.Series:
+    """Cumulative count of bars per period that touched ANY pivot level
+    within `tolerance_pct` (as fraction of price).
     """
-    # Normalize day_id to tz-naive. The builder passes a tz-aware (UTC) series,
-    # but pandas strips tz from `.values`, breaking the `.loc[day_id.values]`
-    # lookup against the groupby-derived tz-aware index.
-    if getattr(day_id.dtype, "tz", None) is not None:
-        day_id = day_id.dt.tz_localize(None)
+    tol_abs = (tolerance_pct / 100.0)
+    abs_dist = levels.sub(close, axis=0).abs()
+    # bar is "touching" if any level is within tolerance × close
+    touched_any = (abs_dist.divide(close, axis=0) <= tol_abs).any(axis=1).astype(int)
+    return touched_any.groupby(period_id).cumsum()
 
-    # Build per-day OHLC from 5min frame.
-    daily = df_5m.groupby(day_id).agg(
-        open=("open", "first"), high=("high", "max"), low=("low", "min"), close=("close", "last")
+
+# ─── Confluence helpers ──────────────────────────────────────────────────
+def _daily_weekly_confluence(
+    daily_levels: pd.DataFrame, weekly_levels: pd.DataFrame, atr_14: pd.Series, atr_mult: float
+) -> pd.Series:
+    """Binary flag: any of {daily_S1, daily_P, daily_R1} within atr_mult×ATR
+    of any of 7 weekly levels.
+
+    Per Decision v2.45 Q14.3.
+    """
+    daily_core = daily_levels[["S1", "P", "R1"]]
+    weekly_all = weekly_levels  # all 7 levels
+    threshold = atr_mult * atr_14  # per-bar absolute threshold
+
+    # For each daily-core × weekly pair, check |d − w| ≤ threshold
+    flag = pd.Series(False, index=daily_levels.index)
+    for d_col in daily_core.columns:
+        for w_col in weekly_all.columns:
+            close_enough = (daily_core[d_col] - weekly_all[w_col]).abs() <= threshold
+            flag = flag | close_enough.fillna(False)
+    return flag.astype(int)
+
+
+def _swing_fib_pivot_confluence(
+    close: pd.Series,
+    swing_low: pd.Series,
+    swing_range: pd.Series,
+    daily_levels: pd.DataFrame,
+    weekly_levels: pd.DataFrame,
+    atr_14: pd.Series,
+    atr_mult: float,
+) -> pd.Series:
+    """Binary flag: nearest Fib retracement level (in price terms) is within
+    atr_mult × ATR of any of 14 pivots (7 daily + 7 weekly).
+
+    Per Decision v2.45 Q14.4.
+    """
+    # Compute the price at each Fib level
+    fib_level_prices = {
+        f: swing_low + f * swing_range for f in FIB_LEVELS
+    }
+    fib_prices_df = pd.DataFrame(fib_level_prices, index=close.index)
+
+    # For each bar, find the Fib level closest to close (nearest by absolute distance)
+    fib_dists = fib_prices_df.sub(close, axis=0).abs()
+    nearest_fib_col = fib_dists.fillna(np.inf).idxmin(axis=1)
+    nearest_fib_price = pd.Series(np.nan, index=close.index)
+    for f in FIB_LEVELS:
+        mask = nearest_fib_col == f
+        nearest_fib_price.loc[mask] = fib_prices_df[f].loc[mask]
+
+    threshold = atr_mult * atr_14
+
+    # Check if any pivot (14 = 7 daily + 7 weekly) is within threshold of nearest_fib_price
+    flag = pd.Series(False, index=close.index)
+    for col in PIVOT_NAMES:
+        flag = flag | ((nearest_fib_price - daily_levels[col]).abs() <= threshold).fillna(False)
+        flag = flag | ((nearest_fib_price - weekly_levels[col]).abs() <= threshold).fillna(False)
+    return flag.astype(int)
+
+
+# ─── Public entry point ──────────────────────────────────────────────────
+def pivot_features(df: pd.DataFrame, atr_14: pd.Series, cfg: dict) -> pd.DataFrame:
+    """Compute Cat 6 = 30 pivot/Fib features.
+
+    Parameters
+    ----------
+    df : DataFrame with open, high, low, close, volume; DatetimeIndex required
+         (used for daily/weekly grouping).
+    atr_14 : ATR(14) Series aligned to df.index.
+    cfg : feature config dict. Uses (defaults baked in):
+        cfg.get('pivots', {}).get('tolerance_pct', 0.05)        # times_tested touch threshold
+        cfg.get('pivots', {}).get('swing_lookback', 5)          # fractal_pivots lookback
+        cfg.get('pivots', {}).get('confluence_atr_mult', 0.25)  # for confluence flags
+        cfg.get('pivots', {}).get('fib_touch_pct', 0.001)       # 0.1% — for fib_touches_*
+
+    Returns
+    -------
+    DataFrame of 30 columns indexed like df.
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError(
+            "pivot_features requires df.index to be a DatetimeIndex (used "
+            "for daily/weekly anchor grouping). Caller must set this before "
+            "calling."
+        )
+
+    high, low, close = df["high"], df["low"], df["close"]
+    p_cfg = cfg.get("pivots", {})
+    tolerance_pct = p_cfg.get("tolerance_pct", 0.05)
+    swing_lookback = p_cfg.get("swing_lookback", 5)
+    confluence_atr_mult = p_cfg.get("confluence_atr_mult", 0.25)
+    fib_touch_pct = p_cfg.get("fib_touch_pct", 0.001)
+
+    # ── Daily and Weekly group IDs ──────────────────────────────────────
+    day_id = pd.Series(df.index.floor("1D"), index=df.index)
+    week_id = pd.Series(
+        df.index.floor("1D") - pd.to_timedelta(df.index.dayofweek, unit="D"),
+        index=df.index,
     )
-    pivots_daily = daily_pivots(daily)
-    # Map onto 5min frame by day_id.
-    mapped = pivots_daily.loc[day_id.values].set_index(df_5m.index)
 
-    close = df_5m["close"]
-    levels = mapped[[f"pivot_{n}" for n in PIVOT_NAMES]]
+    # ── Daily pivots (computed from prior-day OHLC, mapped onto df.index) ─
+    daily_levels = _compute_pivot_levels_mapped(df, day_id)
 
-    # dist_to_nearest, nearest_pivot_type, pivot_zone
-    abs_dist = (levels.sub(close, axis=0)).abs()
-    nearest_idx = abs_dist.values.argmin(axis=1)
-    nearest_dist = np.take_along_axis(abs_dist.values, nearest_idx[:, None], axis=1).ravel()
-    dist_pct = (nearest_dist / close.replace(0, np.nan)) * 100.0
-    nearest_type = nearest_idx  # 0..6 mapping to S3..R3
+    # ── Weekly pivots ────────────────────────────────────────────────────
+    weekly_levels = _compute_pivot_levels_mapped(df, week_id)
 
-    # Zone — which interval the price falls into.
-    arr = levels.values
-    zone = np.full(len(close), -1, dtype=float)
-    closes = close.values
-    for i in range(len(close)):
-        row = arr[i]
-        if np.isnan(row).any():
-            continue
-        # Sorted by construction: S3 < S2 < S1 < P < R1 < R2 < R3.
-        if closes[i] <= row[0]:
-            zone[i] = 0
-        elif closes[i] >= row[-1]:
-            zone[i] = 5
-        else:
-            for z in range(6):
-                if row[z] <= closes[i] < row[z + 1]:
-                    zone[i] = z
-                    break
-
-    # Approach: direction & speed toward nearest level.
-    nearest_level = np.take_along_axis(arr, nearest_idx[:, None], axis=1).ravel()
-    nearest_level_s = pd.Series(nearest_level, index=close.index)
-    diff = close - nearest_level_s
-    diff_prev = diff.shift(1)
-    # +1 if magnitude shrinking (approaching) and price falling toward (above level)
-    approaching = (diff.abs() < diff_prev.abs())
-    # Spec #117: +1 if price falling toward level (price above), -1 if rising toward level (price below).
-    direction = np.where(diff > 0, 1, -1)
-    approach_dir = pd.Series(np.where(approaching, direction, 0), index=close.index)
-    approach_speed = (close - close.shift(3)).abs() / close * 100
-
-    # Times tested today — bars within tolerance per day, cumulative count.
-    tol = tolerance_pct / 100.0
-    touched = ((close - nearest_level_s).abs() <= nearest_level_s * tol).astype(int)
-    times_tested = touched.groupby(day_id).cumsum()
-
-    out = pd.concat(
-        [
-            mapped.reset_index(drop=True).set_index(df_5m.index),
-            pd.DataFrame(
-                {
-                    "dist_to_nearest_pivot_pct": dist_pct,
-                    "nearest_pivot_type": nearest_type,
-                    "pivot_zone": zone,
-                    "pivot_approach_dir": approach_dir,
-                    "pivot_approach_speed": approach_speed,
-                    "pivot_times_tested_today": times_tested,
-                },
-                index=close.index,
-            ),
-        ],
-        axis=1,
+    # ─────────────────────────────────────────────────────────────────────
+    # Cat 6.1 — Daily Fib-pivots (9 features per Q14.1)
+    # ─────────────────────────────────────────────────────────────────────
+    daily_dist_pcts = _level_dist_pcts(close, daily_levels)
+    daily_dist_pcts.columns = [f"pivot_{n}_dist_pct" for n in PIVOT_NAMES]
+    pivot_zone = _zone_categorical(close, daily_levels)
+    pivot_times_tested_today = _times_tested_in_period(
+        close, daily_levels, day_id, tolerance_pct
     )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Cat 6.2 — Daily NEW encodings (3 features)
+    # ─────────────────────────────────────────────────────────────────────
+    pivot_position_daily_01 = safe_div(
+        close - daily_levels["S1"],
+        daily_levels["R1"] - daily_levels["S1"],
+    )
+
+    # min absolute distance to any of 7 daily levels, normalized by ATR
+    daily_abs_dists = daily_levels.sub(close, axis=0).abs()
+    nearest_daily_dist_abs = daily_abs_dists.min(axis=1)
+    dist_to_nearest_pivot_atr = safe_div(nearest_daily_dist_abs, atr_14)
+
+    daily_pivot_weekly_pivot_confluence = _daily_weekly_confluence(
+        daily_levels, weekly_levels, atr_14, confluence_atr_mult
+    )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Cat 6.3 — Weekly Fib-pivots (9 features, mirror of 6.1)
+    # ─────────────────────────────────────────────────────────────────────
+    weekly_dist_pcts = _level_dist_pcts(close, weekly_levels)
+    weekly_dist_pcts.columns = [f"weekly_pivot_{n}_dist_pct" for n in PIVOT_NAMES]
+    weekly_pivot_zone = _zone_categorical(close, weekly_levels)
+    weekly_pivot_times_tested_this_week = _times_tested_in_period(
+        close, weekly_levels, week_id, tolerance_pct
+    )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Cat 6.4 — Weekly NEW encodings (2 features)
+    # ─────────────────────────────────────────────────────────────────────
+    pivot_position_weekly_01 = safe_div(
+        close - weekly_levels["S1"],
+        weekly_levels["R1"] - weekly_levels["S1"],
+    )
+    weekly_abs_dists = weekly_levels.sub(close, axis=0).abs()
+    nearest_weekly_dist_abs = weekly_abs_dists.min(axis=1)
+    dist_to_nearest_weekly_pivot_atr = safe_div(nearest_weekly_dist_abs, atr_14)
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Cat 6.5 — Swing-based Fib retracements (7 features)
+    # ─────────────────────────────────────────────────────────────────────
+    # Use confirmed fractal pivots from divergence.py (lookback=5 → 2-left-2-right)
+    pivot_high_series, _ = fractal_pivots(high, lookback=swing_lookback)
+    _, pivot_low_series = fractal_pivots(low, lookback=swing_lookback)
+
+    # Forward-fill: at any bar, swing_high = most recent confirmed pivot high value
+    swing_high = pivot_high_series.ffill()
+    swing_low = pivot_low_series.ffill()
+    swing_range = (swing_high - swing_low).replace(0, np.nan)
+
+    fib_retracement_pct = safe_div(close - swing_low, swing_range)
+
+    in_golden_pocket = (
+        (fib_retracement_pct >= 0.618) & (fib_retracement_pct <= 0.65)
+    ).fillna(False).astype(int)
+
+    # Fib level prices for nearest-distance computation
+    fib_level_prices = pd.DataFrame(
+        {f: swing_low + f * swing_range for f in FIB_LEVELS},
+        index=close.index,
+    )
+    fib_abs_dists = fib_level_prices.sub(close, axis=0).abs()
+    nearest_fib_dist_abs = fib_abs_dists.min(axis=1)
+    nearest_fib_level_dist = safe_div(nearest_fib_dist_abs, atr_14)
+
+    # Touches at 0.382 and 0.618 specifically — count last 20 bars within 0.1% × close
+    fib_382_price = swing_low + 0.382 * swing_range
+    fib_618_price = swing_low + 0.618 * swing_range
+    touched_382 = ((close - fib_382_price).abs() <= fib_touch_pct * close).astype(int)
+    touched_618 = ((close - fib_618_price).abs() <= fib_touch_pct * close).astype(int)
+    fib_touches_382 = touched_382.rolling(20, min_periods=20).sum()
+    fib_touches_618 = touched_618.rolling(20, min_periods=20).sum()
+
+    # extension_progress_1272 per Q14.2 option (a)
+    extension_progress_1272 = safe_div(close - swing_low, 1.272 * swing_range)
+
+    swing_fib_pivot_confluence = _swing_fib_pivot_confluence(
+        close, swing_low, swing_range,
+        daily_levels, weekly_levels,
+        atr_14, confluence_atr_mult,
+    )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Assemble all 30 features
+    # ─────────────────────────────────────────────────────────────────────
+    out = pd.DataFrame(index=df.index)
+
+    # Cat 6.1 (9)
+    for col in daily_dist_pcts.columns:
+        out[col] = daily_dist_pcts[col]
+    out["pivot_zone"] = pivot_zone
+    out["pivot_times_tested_today"] = pivot_times_tested_today
+
+    # Cat 6.2 (3)
+    out["pivot_position_daily_01"] = pivot_position_daily_01
+    out["dist_to_nearest_pivot_atr"] = dist_to_nearest_pivot_atr
+    out["daily_pivot_weekly_pivot_confluence"] = daily_pivot_weekly_pivot_confluence
+
+    # Cat 6.3 (9)
+    for col in weekly_dist_pcts.columns:
+        out[col] = weekly_dist_pcts[col]
+    out["weekly_pivot_zone"] = weekly_pivot_zone
+    out["weekly_pivot_times_tested_this_week"] = weekly_pivot_times_tested_this_week
+
+    # Cat 6.4 (2)
+    out["pivot_position_weekly_01"] = pivot_position_weekly_01
+    out["dist_to_nearest_weekly_pivot_atr"] = dist_to_nearest_weekly_pivot_atr
+
+    # Cat 6.5 (7)
+    out["fib_retracement_pct"] = fib_retracement_pct
+    out["in_golden_pocket"] = in_golden_pocket
+    out["nearest_fib_level_dist"] = nearest_fib_level_dist
+    out["fib_touches_382"] = fib_touches_382
+    out["fib_touches_618"] = fib_touches_618
+    out["extension_progress_1272"] = extension_progress_1272
+    out["swing_fib_pivot_confluence"] = swing_fib_pivot_confluence
+
     return out
