@@ -41,11 +41,12 @@ CURRENT TAGGING SCOPE:
     Cat 13  ( 7 features) — divergence.py    [v2.0 reshape 7→7 strict spec per Decision v2.43 Q12]
     Cat 4   (12 features) — volume.py         [v2.0 trim 17→12]
     Cat 14  ( 6 features) — volume.py (`money_flow_features`) [v2.0 trim 8→6]
-  Total currently tagged: 115 features.
+    Cat 5   (14 features) — vwap.py           [v2.0 multi-anchor expand 8→14 per Decision v2.44]
+  Total currently tagged: 129 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
-    Cat 5 vwap, Cat 6 pivots (+ 6.2/6.4), Cat 6.5 swing fib retracements,
+    Cat 6 pivots (+ 6.2/6.4), Cat 6.5 swing fib retracements,
     Cat 7 sessions, Cat 8 candles, Cat 9 stats, Cat 10 regime,
     Cat 11 context, Cat 12 lagged, Cat 16 structure, Cat 17 fractal,
     Cat 18 adaptive MA, Cat 19 ichimoku, Cat 20 event memory.
@@ -207,12 +208,39 @@ _CAT_14_DYNAMIC = [
 ]
 
 
+# ─── Cat 5 — VWAP (14 features, all dynamic) ─────────────────────────────
+# Per §7.2 Cat 5 multi-anchor expansion 8→14 + Decision v2.4 + Decision v2.44
+# (Q13 implementation choices). Implemented in features/vwap.py.
+# All 14 mutate intrabar:
+#   - VWAP cumulative numerator/denominator update each tick
+#   - Bands derive from intrabar stdev rolling
+#   - Zone depends on close vs current bands
+#   - Multi-anchor analytics depend on current close vs all 5 VWAP values
+#   - Heavy VWAP flag depends on current close (touches counted in rolling
+#     window which itself slides)
+_CAT_5_DYNAMIC = [
+    # Daily-anchored (5)
+    "daily_vwap", "daily_vwap_upper_band_1sig", "daily_vwap_lower_band_1sig",
+    "daily_vwap_dist_pct", "daily_vwap_zone",
+    # Multi-anchor pos (4)
+    "swing_high_vwap_pos", "swing_low_vwap_pos",
+    "htf_pivot_vwap_pos", "weekly_vwap_pos",
+    # Multi-anchor analytics (5)
+    "multi_anchor_confluence_signed_count",
+    "vwap_of_vwaps_mean_reversion_dist_pct",
+    "dist_to_nearest_anchored_vwap_atr",
+    "vwap_cross_events_count_10",
+    "close_above_below_heavy_vwap_flag",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
 for f in (
     _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC
     + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC + _CAT_4_DYNAMIC + _CAT_14_DYNAMIC
+    + _CAT_5_DYNAMIC
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
@@ -233,7 +261,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/13/14/15/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/13/14/15/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
