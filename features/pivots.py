@@ -87,7 +87,14 @@ def _compute_pivot_levels_mapped(
 
     Returns DataFrame with 7 columns (named per PIVOT_NAMES) indexed like df.
     For each row, the values are the pivots computed from THE PREVIOUS
-    completed period's OHLC (no look-ahead).
+    completed period's OHLC (no look-ahead — `.shift(1)` on the aggregated
+    period frame).
+
+    Implementation note (per Decision v2.45 CORRECTION 2026-04-29): use
+    `period_pivots.reindex(group_id)` instead of `.loc[group_id.values]`.
+    `group_id.values` returns a tz-naive numpy array which cannot match
+    the tz-aware DatetimeIndex produced by groupby on tz-aware input —
+    yields KeyError. `reindex(group_id)` preserves tz on both sides.
     """
     period_ohlc = _aggregate_period(df, group_id)
     period_pivots = _fib_pivots_from_ohlc(
@@ -95,8 +102,9 @@ def _compute_pivot_levels_mapped(
         period_ohlc["low"].shift(1),
         period_ohlc["close"].shift(1),
     )
-    # Map each row's pivots based on which period it belongs to
-    mapped = period_pivots.loc[group_id.values].set_axis(df.index)
+    # Map each row's pivots based on which period it belongs to.
+    # reindex preserves tz; .loc[.values] strips tz and breaks lookup.
+    mapped = period_pivots.reindex(group_id).set_axis(df.index)
     mapped.columns = PIVOT_NAMES
     return mapped
 
