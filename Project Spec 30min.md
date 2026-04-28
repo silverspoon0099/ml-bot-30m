@@ -518,16 +518,28 @@ Computed from the most recent confirmed swing high / swing low (fractal pivots f
 
 #### Category 7 — Session & Time Context (15 → 9 features)
 
-**Keep:**
-- hour_of_day (sin/cos encoded, 2)
-- day_of_week (sin/cos encoded, 2)
-- is_weekend flag (1)
-- session: Asian/London/NY overlap flags (3)
-- month_of_year (cyclic) (1)
+**Keep (9, locked column names + formulas):**
+- `hour_of_day_sin` — `sin(2π × hour / 24)`
+- `hour_of_day_cos` — `cos(2π × hour / 24)`
+- `day_of_week_sin` — `sin(2π × dayofweek / 7)`
+- `day_of_week_cos` — `cos(2π × dayofweek / 7)`
+- `is_weekend` — `1 if dayofweek ≥ 5 else 0` (Sat/Sun)
+- `session_overlap_asian_london` — `1 if hour ∈ [7, 9) UTC` (Tokyo × London window)
+- `session_overlap_london_ny` — `1 if hour ∈ [13, 16) UTC` (London × NY window)
+- `session_overlap_ny_asian` — `1 if hour ∈ [21, 22) ∪ [0, 6) UTC` (NY × Sydney/Tokyo window)
+- `month_of_year` — integer 1..12 (categorical encoding; spec "(cyclic) (1)" satisfied as single-feature month index — LightGBM handles categorical-like ints; sin+cos would exceed (1) count)
 
-**Drop:**
-- Intra-5m session buckets (no analog at 30m)
-- Redundant minute-of-hour features
+"Asian" defined as Tokyo + Sydney combined per standard TA convention.
+
+**Drop from v1.0 (~10 dropped):**
+- Individual session flags: `session_sydney`, `session_tokyo`, `session_london`, `session_new_york` (joint info captured in 3 overlap flags)
+- 4th overlap `overlap_sydney_tokyo` (not in spec; conceptually merged into "Asian" definition)
+- `active_session_count` (derivable from overlap flags)
+- `minutes_into_session`, `minutes_to_session_close` (intra-5m granularity; at 30m these are 0 or 30, useless)
+- `session_range_vs_avg` (low-importance, moves out of Cat 7)
+- `prev_session_range_pct` (Cat 11 territory)
+- `day_of_week` (raw int — replaced by sin/cos encoding)
+- `is_monday` (replaced by `is_weekend` semantically; specific weekdays derivable from sin/cos)
 
 #### Category 8 — Price Action / Candle (9 → 9, unchanged)
 

@@ -1,10 +1,39 @@
-"""Cat 7 — Session & Time context (15 features).
+"""Cat 7 — Session & Time Context (9 features) — v2.0.
 
-Session times in UTC (per Sessions.pine [LuxAlgo]):
-  Sydney   21:00-06:00
-  Tokyo    00:00-09:00
-  London   07:00-16:00
-  New York 13:00-22:00
+Per Project Spec 30min §7.2 Cat 7 trim 15→9. Cyclic encodings replace v1.0
+raw integer time features; intra-5m granularity features dropped (no analog
+at 30m where minute is always 0 or 30).
+
+9 features (locked per spec):
+  - hour_of_day_sin               — sin(2π × hour / 24)
+  - hour_of_day_cos               — cos(2π × hour / 24)
+  - day_of_week_sin               — sin(2π × dayofweek / 7)
+  - day_of_week_cos               — cos(2π × dayofweek / 7)
+  - is_weekend                    — 1 if dayofweek ≥ 5 (Sat/Sun)
+  - session_overlap_asian_london  — 1 if hour ∈ [7, 9) UTC
+                                    (Tokyo × London active window)
+  - session_overlap_london_ny     — 1 if hour ∈ [13, 16) UTC
+                                    (London × NY active window)
+  - session_overlap_ny_asian      — 1 if hour ∈ [21, 22) ∪ [0, 6) UTC
+                                    (NY × Sydney/Tokyo overnight window;
+                                    "Asian" = Tokyo + Sydney per TA convention)
+  - month_of_year                 — integer 1..12 (categorical; spec "(1)"
+                                    constrains to single feature — sin+cos
+                                    would exceed count; LightGBM handles
+                                    categorical-like ints natively)
+
+DROPPED from v1.0:
+  Individual session flags (session_sydney/_tokyo/_london/_new_york — joint
+  info in overlaps), 4th overlap (sydney_tokyo, merged into Asian def),
+  active_session_count (derivable), minutes_into_session +
+  minutes_to_session_close (intra-5m granularity, 0 or 30 at 30m bars),
+  session_range_vs_avg (low-importance), prev_session_range_pct (Cat 11
+  territory), raw day_of_week (replaced by sin/cos), is_monday.
+
+§7.5 TAGGING: All 9 Cat 7 features = static (fixed at bar boundary; never
+mutate intrabar — hour/day/month are properties of the bar timestamp).
+
+INPUTS: df with timestamp column OR DatetimeIndex. Function auto-detects.
 """
 from __future__ import annotations
 
@@ -12,127 +41,73 @@ import numpy as np
 import pandas as pd
 
 
-SESSIONS = {
-    "sydney": (21, 6),
-    "tokyo": (0, 9),
-    "london": (7, 16),
-    "new_york": (13, 22),
-}
-
-
-def in_session(hour: pd.Series, start: int, end: int) -> pd.Series:
-    if start < end:
-        return ((hour >= start) & (hour < end)).astype(int)
-    # wraps midnight
-    return ((hour >= start) | (hour < end)).astype(int)
-
-
-def session_id_5min(ts: pd.Series) -> pd.Series:
-    """Define the trading session as the UTC date — used for VWAP/range groupings.
-
-    A more granular per-major-session grouping would be possible, but for daily
-    pivot/VWAP alignment a UTC-day grouping is the convention used by Pivots Fib
-    and most session-VWAP indicators.
-    """
-    return ts.dt.floor("1D")
-
-
-def primary_session(hour: int) -> str:
-    """Most-recently-opened session at this hour. Used for "minutes_into_session"."""
-    # Order by start hour ascending; session whose start is closest to (and <=) hour.
-    starts = [
-        ("tokyo", 0),
-        ("london", 7),
-        ("new_york", 13),
-        ("sydney", 21),
-    ]
-    chosen = "sydney"
-    for name, h in starts:
-        if h <= hour:
-            chosen = name
-    return chosen
-
-
 def session_features(df: pd.DataFrame) -> pd.DataFrame:
-    ts = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-    hour = ts.dt.hour
-    minute = ts.dt.minute
-    dow = ts.dt.dayofweek
+    """Compute Cat 7 = 9 session/time features.
 
-    s_sydney = in_session(hour, *SESSIONS["sydney"])
-    s_tokyo = in_session(hour, *SESSIONS["tokyo"])
-    s_london = in_session(hour, *SESSIONS["london"])
-    s_ny = in_session(hour, *SESSIONS["new_york"])
+    Parameters
+    ----------
+    df : DataFrame. Must have either:
+         - DatetimeIndex (preferred — used for tz-aware timestamps), OR
+         - 'timestamp' column (ms since epoch, will be parsed to UTC).
 
-    overlap_tk_ld = ((hour >= 7) & (hour < 9)).astype(int)
-    overlap_ld_ny = ((hour >= 13) & (hour < 16)).astype(int)
-    overlap_ny_sy = (hour == 21).astype(int)
-    overlap_sy_tk = ((hour >= 0) & (hour < 6)).astype(int)
+    Returns
+    -------
+    DataFrame of 9 columns indexed like df.
+    """
+    if isinstance(df.index, pd.DatetimeIndex):
+        ts = df.index
+    elif "timestamp" in df.columns:
+        ts = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    else:
+        raise ValueError(
+            "session_features requires either DatetimeIndex or 'timestamp' column."
+        )
 
-    active = s_sydney + s_tokyo + s_london + s_ny
+    # Extract time components as numpy arrays (cleaner arithmetic)
+    if isinstance(ts, pd.DatetimeIndex):
+        hour = ts.hour
+        dow = ts.dayofweek
+        month = ts.month
+    else:
+        # ts is a Series here (from timestamp column path)
+        hour = ts.dt.hour.values
+        dow = ts.dt.dayofweek.values
+        month = ts.dt.month.values
 
-    # Primary session = most recently opened.
-    primary = hour.apply(primary_session)
-    starts = {"tokyo": 0, "london": 7, "new_york": 13, "sydney": 21}
-    ends = {"tokyo": 9, "london": 16, "new_york": 22, "sydney": 6}
-    primary_start = primary.map(starts)
-    primary_end = primary.map(ends)
+    # Cyclic encodings (4 features)
+    hour_of_day_sin = np.sin(2 * np.pi * hour / 24.0)
+    hour_of_day_cos = np.cos(2 * np.pi * hour / 24.0)
+    day_of_week_sin = np.sin(2 * np.pi * dow / 7.0)
+    day_of_week_cos = np.cos(2 * np.pi * dow / 7.0)
 
-    # Minutes into / to close — handle Sydney wraparound (start=21, end=6 next day).
-    cur_min = hour * 60 + minute
-    start_min = primary_start * 60
-    end_min = primary_end * 60
-    mins_in = np.where(
-        primary == "sydney",
-        np.where(hour >= 21, cur_min - start_min, cur_min + (24 * 60 - start_min)),
-        cur_min - start_min,
-    )
-    mins_to = np.where(
-        primary == "sydney",
-        np.where(hour < 6, end_min - cur_min, (24 * 60 + end_min) - cur_min),
-        end_min - cur_min,
-    )
+    # Weekend flag (1 feature) — Saturday=5, Sunday=6
+    is_weekend = (dow >= 5).astype(int)
 
-    # Session range vs avg of last 20 same-session (use UTC day as session id for simplicity).
-    day_id = ts.dt.floor("1D")
-    grp = df.groupby(day_id)
-    s_high = grp["high"].transform("max")
-    s_low = grp["low"].transform("min")
-    s_range = s_high - s_low
-    # Take the last value per day, then rolling 20-day avg.
-    daily_range = s_range.groupby(day_id).last()
-    daily_avg20 = daily_range.shift(1).rolling(20, min_periods=20).mean()
-    avg_map = daily_avg20.reindex(day_id.values).set_axis(df.index)
-    range_vs_avg = s_range / avg_map
+    # Session overlap flags (3 features) — UTC hour-based
+    # Asian = Tokyo (00:00-09:00) + Sydney (21:00-06:00)
+    # London = 07:00-16:00
+    # NY = 13:00-22:00
+    session_overlap_asian_london = ((hour >= 7) & (hour < 9)).astype(int)
+    session_overlap_london_ny = ((hour >= 13) & (hour < 16)).astype(int)
+    # NY × Asian = NY-Sydney evening overlap (21-22) + Sydney-Tokyo overnight (0-6)
+    session_overlap_ny_asian = (
+        ((hour >= 21) & (hour < 22)) | ((hour >= 0) & (hour < 6))
+    ).astype(int)
 
-    # Previous session (= previous UTC day).
-    prev_range_pct = (
-        ((daily_range - daily_range) * 0).rename("prev_session_range_pct")  # placeholder
-    )
-    prev_high = grp["high"].transform("max")
-    prev_low = grp["low"].transform("min")
-    prev_open = grp["open"].transform("first")
-    prev_session_range = (prev_high - prev_low) / prev_open * 100
-    prev_session_range_per_day = prev_session_range.groupby(day_id).last().shift(1)
-    prev_range_pct = prev_session_range_per_day.reindex(day_id.values).set_axis(df.index)
+    # Month of year (1 feature) — integer 1..12, categorical encoding
+    month_of_year = month.astype(int) if hasattr(month, "astype") else month
 
     return pd.DataFrame(
         {
-            "session_sydney": s_sydney,
-            "session_tokyo": s_tokyo,
-            "session_london": s_london,
-            "session_new_york": s_ny,
-            "overlap_tokyo_london": overlap_tk_ld,
-            "overlap_london_ny": overlap_ld_ny,
-            "overlap_ny_sydney": overlap_ny_sy,
-            "overlap_sydney_tokyo": overlap_sy_tk,
-            "active_session_count": active,
-            "minutes_into_session": mins_in,
-            "minutes_to_session_close": mins_to,
-            "session_range_vs_avg": range_vs_avg,
-            "prev_session_range_pct": prev_range_pct,
-            "day_of_week": dow,
-            "is_monday": (dow == 0).astype(int),
+            "hour_of_day_sin": hour_of_day_sin,
+            "hour_of_day_cos": hour_of_day_cos,
+            "day_of_week_sin": day_of_week_sin,
+            "day_of_week_cos": day_of_week_cos,
+            "is_weekend": is_weekend,
+            "session_overlap_asian_london": session_overlap_asian_london,
+            "session_overlap_london_ny": session_overlap_london_ny,
+            "session_overlap_ny_asian": session_overlap_ny_asian,
+            "month_of_year": month_of_year,
         },
         index=df.index,
     )

@@ -43,11 +43,12 @@ CURRENT TAGGING SCOPE:
     Cat 14  ( 6 features) — volume.py (`money_flow_features`) [v2.0 trim 8→6]
     Cat 5   (14 features) — vwap.py           [v2.0 multi-anchor expand 8→14 per Decision v2.44]
     Cat 6   (30 features) — pivots.py         [v2.0 expand 13→30, sub-cats 6.1–6.5 per Decision v2.45]
-  Total currently tagged: 159 features.
+    Cat 7   ( 9 features) — sessions.py       [v2.0 trim 15→9, cyclic encodings rewrite]
+  Total currently tagged: 168 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
-    Cat 7 sessions, Cat 8 candles, Cat 9 stats, Cat 10 regime,
+    Cat 8 candles, Cat 9 stats, Cat 10 regime,
     Cat 11 context, Cat 12 lagged, Cat 16 structure, Cat 17 fractal,
     Cat 18 adaptive MA, Cat 19 ichimoku, Cat 20 event memory.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
@@ -270,6 +271,23 @@ _CAT_6_STATIC = [
 ]
 
 
+# ─── Cat 7 — Session & Time Context (9 features, all static per §7.5) ────
+# Per §7.2 Cat 7 trim 15→9. Implemented in features/sessions.py.
+# §7.5 explicit: "Cat 7 session/time features — fixed per bar boundary".
+# Hour/dayofweek/month are properties of the bar timestamp; they don't
+# mutate intrabar (a 30m bar at 14:00 UTC has hour=14 throughout, even if
+# we re-evaluate at 14:15).
+_CAT_7_STATIC = [
+    "hour_of_day_sin", "hour_of_day_cos",
+    "day_of_week_sin", "day_of_week_cos",
+    "is_weekend",
+    "session_overlap_asian_london",
+    "session_overlap_london_ny",
+    "session_overlap_ny_asian",
+    "month_of_year",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
@@ -280,7 +298,7 @@ for f in (
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
-for f in _CAT_2A_STATIC + _CAT_22_STATIC_OVERRIDE + _CAT_6_STATIC:
+for f in _CAT_2A_STATIC + _CAT_22_STATIC_OVERRIDE + _CAT_6_STATIC + _CAT_7_STATIC:
     FEATURE_STABILITY[f] = "static"
 
 
@@ -297,7 +315,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/5/6/13/14/15/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/6/7/13/14/15/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
