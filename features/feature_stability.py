@@ -56,13 +56,19 @@ CURRENT TAGGING SCOPE:
     Cat 16  (10 features) — structure.py      [v2.0 reconcile 10→10 per Decision v2.46 Q15;
                                                first MIXED block — 8 static + 2 dynamic
                                                feature-level split per Q15.5]
-  Total currently tagged: 207 features.
+    Cat 19  ( 6 features) — ichimoku.py       [v2.0 expand 5→6 per Decision v2.47 Q16;
+                                               all 6 dynamic — Cat 19 REMOVED from §7.5
+                                               mixed list per Q16.4 (a) (locked features
+                                               are all close-relative dist_pct → uniformly
+                                               dynamic). Cat 16 remains the only mixed-
+                                               split block.]
+  Total currently tagged: 213 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
     Cat 8 candles, Cat 9 stats,
     Cat 11 context, Cat 12 lagged, Cat 17 fractal,
-    Cat 18 adaptive MA, Cat 19 ichimoku.
+    Cat 18 adaptive MA.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
 from __future__ import annotations
@@ -382,6 +388,28 @@ _CAT_16_DYNAMIC = [
 ]
 
 
+# ─── Cat 19 — Ichimoku (6 features, all dynamic per Q16.4 (a)) ───────────
+# Per §7.2 Cat 19 + Decision v2.47 Q16. Implemented in features/ichimoku.py.
+# Cat 19 was originally on §7.5 mixed list (rationale: senkou spans
+# displaced 26 bars to past = static math; Tenkan/Kijun = dynamic math).
+# Per Q16.4 (a), Cat 19 was REMOVED from the §7.5 mixed list because the
+# locked feature shapes per §15 emit ALL 6 features as close-relative
+# `*_dist_pct`, which makes every feature close-dependent and uniformly
+# dynamic at the feature level. Cat 16 remains the only mixed-split block.
+# Phase 4 intrabar scout can still optimize `senkou_*_dist_pct`
+# recomputation by caching the displaced span value (the span itself
+# doesn't change within the current 30m bar) — implementation detail in
+# scout code, not a feature-tagging concern.
+_CAT_19_DYNAMIC = [
+    "tenkan_dist_pct",
+    "kijun_dist_pct",
+    "tk_diff_pct",
+    "senkou_a_dist_pct",
+    "senkou_b_dist_pct",
+    "cloud_dist_pct",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
@@ -389,6 +417,7 @@ for f in (
     _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC
     + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC + _CAT_4_DYNAMIC + _CAT_14_DYNAMIC
     + _CAT_5_DYNAMIC + _CAT_20_DYNAMIC + _CAT_10_DYNAMIC + _CAT_16_DYNAMIC
+    + _CAT_19_DYNAMIC
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
@@ -412,7 +441,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/5/6/7/10/13/14/15/16/20/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/6/7/10/13/14/15/16/19/20/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
