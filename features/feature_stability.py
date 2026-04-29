@@ -62,13 +62,15 @@ CURRENT TAGGING SCOPE:
                                                are all close-relative dist_pct → uniformly
                                                dynamic). Cat 16 remains the only mixed-
                                                split block.]
-  Total currently tagged: 213 features.
+    Cat 18  ( 4 features) — adaptive_ma.py    [v2.0 trim 5→4 per Decision v2.48 Q17;
+                                               all 4 dynamic. psar_direction + psar_dist_pct
+                                               combined into single signed psar_state_dist_pct.]
+  Total currently tagged: 217 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
     Cat 8 candles, Cat 9 stats,
-    Cat 11 context, Cat 12 lagged, Cat 17 fractal,
-    Cat 18 adaptive MA.
+    Cat 11 context, Cat 12 lagged, Cat 17 fractal.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
 from __future__ import annotations
@@ -410,6 +412,21 @@ _CAT_19_DYNAMIC = [
 ]
 
 
+# ─── Cat 18 — Adaptive MAs (4 features, all dynamic per Q17.6) ───────────
+# Per §7.2 Cat 18 + Decision v2.48 Q17. Implemented in features/adaptive_ma.py.
+# Trim 5→4 with v1.0 psar_direction + psar_dist_pct combined into single
+# signed psar_state_dist_pct (sign carries trend state by Wilder
+# construction). All 4 features close-relative *_dist_pct → close-dependent
+# → uniformly dynamic (same pure-dynamic pattern as Cat 19 post-Q16.4).
+# Cat 18 was never on §7.5 mixed list.
+_CAT_18_DYNAMIC = [
+    "kama_dist_pct",
+    "dema_dist_pct",
+    "tema_dist_pct",
+    "psar_state_dist_pct",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
@@ -417,7 +434,7 @@ for f in (
     _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC
     + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC + _CAT_4_DYNAMIC + _CAT_14_DYNAMIC
     + _CAT_5_DYNAMIC + _CAT_20_DYNAMIC + _CAT_10_DYNAMIC + _CAT_16_DYNAMIC
-    + _CAT_19_DYNAMIC
+    + _CAT_19_DYNAMIC + _CAT_18_DYNAMIC
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
@@ -441,7 +458,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/5/6/7/10/13/14/15/16/19/20/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/6/7/10/13/14/15/16/18/19/20/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
