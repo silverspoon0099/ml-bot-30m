@@ -44,13 +44,14 @@ CURRENT TAGGING SCOPE:
     Cat 5   (14 features) — vwap.py           [v2.0 multi-anchor expand 8→14 per Decision v2.44]
     Cat 6   (30 features) — pivots.py         [v2.0 expand 13→30, sub-cats 6.1–6.5 per Decision v2.45]
     Cat 7   ( 9 features) — sessions.py       [v2.0 trim 15→9, cyclic encodings rewrite]
-  Total currently tagged: 168 features.
+    Cat 20  (22 features) — event_memory.py   [v2.0 trim 41→22, per spec exact column names]
+  Total currently tagged: 190 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
     Cat 8 candles, Cat 9 stats, Cat 10 regime,
     Cat 11 context, Cat 12 lagged, Cat 16 structure, Cat 17 fractal,
-    Cat 18 adaptive MA, Cat 19 ichimoku, Cat 20 event memory.
+    Cat 18 adaptive MA, Cat 19 ichimoku.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
 from __future__ import annotations
@@ -288,13 +289,45 @@ _CAT_7_STATIC = [
 ]
 
 
+# ─── Cat 20 — Event Memory (22 features, all dynamic per §7.5) ───────────
+# Per §7.2 Cat 20 trim 41→22. Implemented in features/event_memory.py.
+# §7.5 explicit: "Cat 20 event memory (bars_since_* ticks forward, but the
+# event-trigger itself moves on dynamic oscillators)". Counters mutate as
+# new bars open/close; triggers depend on current oscillator values which
+# are dynamic.
+_CAT_20_DYNAMIC = [
+    # RSI block (5)
+    "bars_since_rsi_ob", "bars_since_rsi_os", "bars_since_rsi_mid_cross",
+    "bars_in_current_rsi_episode", "last_rsi_extreme_depth",
+    # Stoch block (2)
+    "bars_since_stoch_ob", "bars_since_stoch_os",
+    # WT block (2)
+    "bars_since_wt_ob", "bars_since_wt_os",
+    # ADX block (2)
+    "bars_since_adx_trend_start", "bars_since_adx_weak_start",
+    # Squeeze block (3)
+    "bars_since_squeeze_fire", "bars_since_squeeze_entry",
+    "squeeze_direction_at_fire",
+    # Volume (1)
+    "bars_since_volume_spike",
+    # Structure (2)
+    "bars_since_last_hh", "bars_since_last_ll",
+    # Pivot (2)
+    "bars_since_pivot_touch_daily", "bars_since_pivot_touch_weekly",
+    # EMA (1)
+    "bars_since_ema21_cross",
+    # MACD (2)
+    "bars_since_macd_zero_cross", "bars_since_macd_signal_cross",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
 for f in (
     _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC
     + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC + _CAT_4_DYNAMIC + _CAT_14_DYNAMIC
-    + _CAT_5_DYNAMIC
+    + _CAT_5_DYNAMIC + _CAT_20_DYNAMIC
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
@@ -315,7 +348,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/5/6/7/13/14/15/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/6/7/13/14/15/20/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 

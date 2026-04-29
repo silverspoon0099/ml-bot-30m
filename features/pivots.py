@@ -48,6 +48,37 @@ PIVOT_NAMES = ["S3", "S2", "S1", "P", "R1", "R2", "R3"]
 FIB_LEVELS = [0.382, 0.5, 0.618, 0.786]
 
 
+# ─── Public helper: pivot LEVELS only (used by event_memory.py) ──────────
+def compute_pivot_levels(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Compute daily and weekly pivot LEVELS (no derived features).
+
+    Used by `event_memory.py` to detect pivot touches without re-running
+    the full Cat 6 `pivot_features` pipeline. Same look-ahead safety:
+    levels reflect PRIOR-period OHLC via `.shift(1)` upstream.
+
+    Parameters
+    ----------
+    df : DataFrame with open/high/low/close + DatetimeIndex.
+
+    Returns
+    -------
+    (daily_levels, weekly_levels) : tuple of DataFrames, each with 7
+    columns (S3, S2, S1, P, R1, R2, R3) indexed like df.
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError(
+            "compute_pivot_levels requires df.index to be a DatetimeIndex."
+        )
+    day_id = pd.Series(df.index.floor("1D"), index=df.index)
+    week_id = pd.Series(
+        df.index.floor("1D") - pd.to_timedelta(df.index.dayofweek, unit="D"),
+        index=df.index,
+    )
+    daily_levels = _compute_pivot_levels_mapped(df, day_id)
+    weekly_levels = _compute_pivot_levels_mapped(df, week_id)
+    return daily_levels, weekly_levels
+
+
 # ─── Pivot level math ────────────────────────────────────────────────────
 def _fib_pivots_from_ohlc(prev_high: pd.Series, prev_low: pd.Series, prev_close: pd.Series) -> pd.DataFrame:
     """Standard Fibonacci pivots from prior-period OHLC.
