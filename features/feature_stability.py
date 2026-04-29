@@ -45,11 +45,12 @@ CURRENT TAGGING SCOPE:
     Cat 6   (30 features) — pivots.py         [v2.0 expand 13→30, sub-cats 6.1–6.5 per Decision v2.45]
     Cat 7   ( 9 features) — sessions.py       [v2.0 trim 15→9, cyclic encodings rewrite]
     Cat 20  (22 features) — event_memory.py   [v2.0 trim 41→22, per spec exact column names]
-  Total currently tagged: 190 features.
+    Cat 10  ( 7 features) — regime.py         [v2.0 rewrite 8→7 per Decision v2.37 Q3]
+  Total currently tagged: 197 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
-    Cat 8 candles, Cat 9 stats, Cat 10 regime,
+    Cat 8 candles, Cat 9 stats,
     Cat 11 context, Cat 12 lagged, Cat 16 structure, Cat 17 fractal,
     Cat 18 adaptive MA, Cat 19 ichimoku.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
@@ -321,13 +322,36 @@ _CAT_20_DYNAMIC = [
 ]
 
 
+# ─── Cat 10 — Market Regime (7 features, all dynamic per §7.5) ───────────
+# Per §7.2 Cat 10 rewrite + Decision v2.37 Q3. Implemented in features/regime.py.
+# §7.5 explicit: "Cat 10 regime classifications depend on current
+# ADX/ATR/volume/EMA values which mutate intrabar; tercile percentiles are
+# rolling-window evaluations on the latest bar's value." All 7 dynamic:
+#   - trending_regime: ADX/DI thresholds re-evaluated each bar close
+#   - ranging_regime: ADX + BB-width-percentile re-evaluated each bar close
+#   - volatility_regime: tercile of atr_percentile (which itself rolls)
+#   - volume_regime: tercile of rolling 100-bar volume rank
+#   - trend_direction: EMA stack mutates with current close
+#   - regime_change_bar: counter ticks forward each bar; resets on flip
+#   - vol_adjusted_momentum_regime: 3-bar ROC / ATR%, both move with close
+_CAT_10_DYNAMIC = [
+    "trending_regime",
+    "ranging_regime",
+    "volatility_regime",
+    "volume_regime",
+    "trend_direction",
+    "regime_change_bar",
+    "vol_adjusted_momentum_regime",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
 for f in (
     _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC
     + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC + _CAT_4_DYNAMIC + _CAT_14_DYNAMIC
-    + _CAT_5_DYNAMIC + _CAT_20_DYNAMIC
+    + _CAT_5_DYNAMIC + _CAT_20_DYNAMIC + _CAT_10_DYNAMIC
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
@@ -348,7 +372,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/5/6/7/13/14/15/20/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/6/7/10/13/14/15/20/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 

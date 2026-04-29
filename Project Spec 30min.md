@@ -558,15 +558,23 @@ Keep all v1.0:
 **Drop:**
 - Fat-tail density estimator (too noisy at bar-level 30m)
 
-#### Category 10 — Market Regime (7 → 7, unchanged)
+#### Category 10 — Market Regime (7 → 7, count unchanged but rewrite per Decision v2.37 Q3)
 
-- trending_regime flag (ADX+EMA alignment) (1)
-- ranging_regime flag (1)
-- volatility_regime (low/normal/high tercile over 100 bars) (1)
-- volume_regime (same tercile method) (1)
-- trend_direction (+1/0/-1 via EMA stack) (1)
-- regime_change_bar (bars since last regime flip) (1)
-- vol-adjusted momentum regime (1)
+**Per Decision v2.37 Q3**: drop v1.0's `efficiency_ratio` + `choppiness_index` + `regime_volatile`/`regime_quiet` binaries; add `trend_direction` + `volume_regime` + `vol_adjusted_momentum_regime`.
+
+**Keep (7, locked column names + formulas):**
+- `trending_regime` — `(adx > 25) & (|di_plus − di_minus| > 10)`; binary 0/1
+- `ranging_regime` — `(adx < 20) & (bb_width_percentile < 30)`; binary 0/1
+- `volatility_regime` — tercile 0/1/2 from `atr_percentile` (rolling 100-bar): 0 if <33.33 (low), 2 if >66.67 (high), else 1 (normal)
+- `volume_regime` — tercile 0/1/2 from `volume.rolling(100).rank(pct=True)*100`: same threshold logic
+- `trend_direction` — +1 if `ema9 > ema21 > ema50` (bull stack), −1 if `ema9 < ema21 < ema50` (bear stack), 0 otherwise (mixed)
+- `regime_change_bar` — bars since last regime label flip; label = `1 if trending` / `4 if ranging` / `0 if neither`; counter resets on label change
+- `vol_adjusted_momentum_regime` — `roc_3bar / atr_pct` where roc_3bar = `(close/close.shift(3) - 1) × 100` and atr_pct = `atr_14 / close × 100`. Signed continuous, vol-normalized momentum strength.
+
+**Dropped from v1.0**:
+- `regime_volatile`, `regime_quiet` (replaced by `volatility_regime` tercile)
+- `efficiency_ratio`, `choppiness_index` (per spec Q3 — not in keep list)
+- `bars_in_current_regime` renamed → `regime_change_bar`
 
 #### Category 11 — Previous Context / Memory (8 → 6 features)
 
