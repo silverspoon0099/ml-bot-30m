@@ -65,12 +65,17 @@ CURRENT TAGGING SCOPE:
     Cat 18  ( 4 features) — adaptive_ma.py    [v2.0 trim 5→4 per Decision v2.48 Q17;
                                                all 4 dynamic. psar_direction + psar_dist_pct
                                                combined into single signed psar_state_dist_pct.]
-  Total currently tagged: 217 features.
+    Cat 8   ( 9 features) — candles.py        [v2.0 hybrid reshape 9→9 per Decision v2.49 Q18;
+                                               all 9 dynamic. SPEC AMENDMENT: drop binary
+                                               doji + hammer flags as redundant with
+                                               continuous body+wicks; preserve v1.0
+                                               is_bullish + body_vs_prev_body; add range_pct
+                                               + inside_bar_flag.]
+  Total currently tagged: 226 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
-    Cat 8 candles, Cat 9 stats,
-    Cat 11 context, Cat 12 lagged, Cat 17 fractal.
+    Cat 9 stats, Cat 11 context, Cat 12 lagged, Cat 17 fractal.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
 from __future__ import annotations
@@ -427,6 +432,30 @@ _CAT_18_DYNAMIC = [
 ]
 
 
+# ─── Cat 8 — Price Action / Candle (9 features, all dynamic per Q18.8) ──
+# Per §7.2 Cat 8 + Decision v2.49 Q18 (hybrid spec amendment).
+# Implemented in features/candles.py.
+# Hybrid reshape 9→9: drop binary doji_flag + hammer_or_shooting_star_flag
+# (redundant with continuous body+wicks via tree splits); preserve v1.0
+# is_bullish + body_vs_prev_body (distinct continuous signal); drop v1.0
+# consecutive_bull/bear (weak signal at 30m); add range_pct + inside_bar_flag
+# (genuinely-new info — range_pct = volatility burst marker, inside_bar_flag
+# = true 2-bar conditional NOT derivable from single-bar continuous).
+# All 9 close-relative or OHLC-conditional → close/high/low/open mutate
+# intrabar → uniformly dynamic. Cat 8 was never on §7.5 mixed list.
+_CAT_8_DYNAMIC = [
+    "body_pct",
+    "upper_wick_pct",
+    "lower_wick_pct",
+    "range_pct",
+    "is_bullish",
+    "body_vs_prev_body",
+    "engulfing_signal",
+    "pin_bar_signal",
+    "inside_bar_flag",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
@@ -434,7 +463,7 @@ for f in (
     _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC
     + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC + _CAT_4_DYNAMIC + _CAT_14_DYNAMIC
     + _CAT_5_DYNAMIC + _CAT_20_DYNAMIC + _CAT_10_DYNAMIC + _CAT_16_DYNAMIC
-    + _CAT_19_DYNAMIC + _CAT_18_DYNAMIC
+    + _CAT_19_DYNAMIC + _CAT_18_DYNAMIC + _CAT_8_DYNAMIC
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
@@ -458,7 +487,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/5/6/7/10/13/14/15/16/18/19/20/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/6/7/8/10/13/14/15/16/18/19/20/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
