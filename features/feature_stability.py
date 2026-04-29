@@ -24,6 +24,13 @@ Tags every feature column produced by builder.py as one of:
                  static once confirmed; the "current move so far" is
                  dynamic), Cat 19 Ichimoku (spans displaced to past are
                  static; Tenkan/Kijun are dynamic).
+                 Per Decision v2.46 Q15.5, categories tagged `mixed` in
+                 §7.5 may be split at the FEATURE level into static and
+                 dynamic sub-lists in this file. The mixed designation
+                 describes the category as a whole; individual feature
+                 columns are tagged precisely so the Phase 4 intrabar
+                 scout can pull only `static` + confirmed-mixed-static
+                 features without rebroadcasting the whole category.
 
 This taxonomy pays off in Phase 4 intrabar scout: reads only `static` +
 confirmed-`mixed` features plus fresh 5m bar-close values of selected
@@ -46,12 +53,15 @@ CURRENT TAGGING SCOPE:
     Cat 7   ( 9 features) — sessions.py       [v2.0 trim 15→9, cyclic encodings rewrite]
     Cat 20  (22 features) — event_memory.py   [v2.0 trim 41→22, per spec exact column names]
     Cat 10  ( 7 features) — regime.py         [v2.0 rewrite 8→7 per Decision v2.37 Q3]
-  Total currently tagged: 197 features.
+    Cat 16  (10 features) — structure.py      [v2.0 reconcile 10→10 per Decision v2.46 Q15;
+                                               first MIXED block — 8 static + 2 dynamic
+                                               feature-level split per Q15.5]
+  Total currently tagged: 207 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
     Cat 8 candles, Cat 9 stats,
-    Cat 11 context, Cat 12 lagged, Cat 16 structure, Cat 17 fractal,
+    Cat 11 context, Cat 12 lagged, Cat 17 fractal,
     Cat 18 adaptive MA, Cat 19 ichimoku.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
@@ -345,17 +355,47 @@ _CAT_10_DYNAMIC = [
 ]
 
 
+# ─── Cat 16 — Market Structure (10 features, MIXED block) ───────────────
+# Per §7.2 Cat 16 + Decision v2.46 Q15. Implemented in features/structure.py.
+# §7.5 narrative: Cat 16 = mixed (HH/HL/LH/LL confirmations static; current
+# move dynamic). Per Decision v2.46 Q15.5, mixed CATEGORY tag is split at
+# the FEATURE level: 8 static + 2 dynamic.
+#
+# STATIC (8) — derived from confirmed fractal pivots; only update when a
+# new pivot confirms (deterministic at bar = pivot_bar + lookback). Pivot
+# values are themselves intrabar-stable (a 30m pivot does not retroactively
+# move once confirmed).
+_CAT_16_STATIC = [
+    "structure_type",
+    "swing_length_ratio",
+    "higher_highs_count_20",
+    "higher_lows_count_20",
+    "lower_highs_count_20",
+    "lower_lows_count_20",
+    "fractal_pivot_count_20",
+    "break_of_structure",
+]
+# DYNAMIC (2) — both depend on current close, mutate intrabar.
+_CAT_16_DYNAMIC = [
+    "swing_high_dist_pct",
+    "swing_low_dist_pct",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
 for f in (
     _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC
     + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC + _CAT_4_DYNAMIC + _CAT_14_DYNAMIC
-    + _CAT_5_DYNAMIC + _CAT_20_DYNAMIC + _CAT_10_DYNAMIC
+    + _CAT_5_DYNAMIC + _CAT_20_DYNAMIC + _CAT_10_DYNAMIC + _CAT_16_DYNAMIC
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
-for f in _CAT_2A_STATIC + _CAT_22_STATIC_OVERRIDE + _CAT_6_STATIC + _CAT_7_STATIC:
+for f in (
+    _CAT_2A_STATIC + _CAT_22_STATIC_OVERRIDE + _CAT_6_STATIC + _CAT_7_STATIC
+    + _CAT_16_STATIC
+):
     FEATURE_STABILITY[f] = "static"
 
 
@@ -372,7 +412,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/5/6/7/10/13/14/15/20/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/6/7/10/13/14/15/16/20/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
