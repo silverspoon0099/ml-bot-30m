@@ -71,11 +71,19 @@ CURRENT TAGGING SCOPE:
                                                continuous body+wicks; preserve v1.0
                                                is_bullish + body_vs_prev_body; add range_pct
                                                + inside_bar_flag.]
-  Total currently tagged: 226 features.
+    Cat 9   ( 7 features) — stats.py          [v2.0 trim 8→7 per Decision v2.50 Q19;
+                                               all 7 dynamic. mean_reversion_features;
+                                               caller-supplied bb_position from Cat 3.
+                                               bb_dist_mid_sigma ≡ zscore_20 redundancy
+                                               accepted per Q19.2 (a).]
+    Cat 17  ( 6 features) — stats.py          [v2.0 trim 9→6 per Decision v2.50 Q19;
+                                               all 6 dynamic. fractal_stats_features;
+                                               self-contained.]
+  Total currently tagged: 239 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
-    Cat 9 stats, Cat 11 context, Cat 12 lagged, Cat 17 fractal.
+    Cat 11 context, Cat 12 lagged.
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
 from __future__ import annotations
@@ -456,6 +464,47 @@ _CAT_8_DYNAMIC = [
 ]
 
 
+# ─── Cat 9 — Mean Reversion / Statistics (7 features, all dynamic) ──────
+# Per §7.2 Cat 9 + Decision v2.50 Q19. Implemented in features/stats.py
+# (`mean_reversion_features`). Trim 8→7: drop mean_reversion_score per §15;
+# drop orphan rsi_zscore + return_5/20/60bar (overlap Cat 1); add
+# bb_dist_mid_sigma. Caller-supplied bb_position from Cat 3 renamed to
+# bb_pct_b. bb_dist_mid_sigma ≡ zscore_20 redundancy accepted per Q19.2 (a)
+# (LightGBM tolerates duplicates; spec count of 7 wins).
+# All 7 features close-relative or close-derived → close-dependent →
+# uniformly dynamic.
+_CAT_9_DYNAMIC = [
+    "bb_pct_b",
+    "bb_dist_mid_sigma",
+    "zscore_20",
+    "zscore_50",
+    "skewness_20",
+    "kurtosis_20",
+    "autocorr_1",
+]
+
+
+# ─── Cat 17 — Statistical / Fractal (6 features, all dynamic) ───────────
+# Per §7.2 Cat 17 + Decision v2.50 Q19. Implemented in features/stats.py
+# (`fractal_stats_features`). Trim 9→6: drop parkinson_vol + variance_ratio
+# per §15; move autocorrelation_1 → Cat 9 (Q19); add autocorr_20 +
+# realized_vol_of_realized_vol per spec. v1.0 price_entropy renamed
+# entropy_20 (window 50→20 per spec); v1.0 autocorrelation_5 renamed
+# autocorr_5. Hurst window 100, FD window 50 per spec; canonical
+# algorithms (simplified R/S, box-counting unit-square, Shannon entropy,
+# two-pass rolling std).
+# All 6 features evaluate using current bar's log return / close →
+# close-dependent → uniformly dynamic.
+_CAT_17_DYNAMIC = [
+    "hurst_exponent",
+    "fractal_dimension",
+    "autocorr_5",
+    "autocorr_20",
+    "entropy_20",
+    "realized_vol_of_realized_vol",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
@@ -463,7 +512,8 @@ for f in (
     _CAT_1_DYNAMIC + _CAT_2_DYNAMIC + _CAT_22_DYNAMIC + _CAT_3_DYNAMIC
     + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC + _CAT_4_DYNAMIC + _CAT_14_DYNAMIC
     + _CAT_5_DYNAMIC + _CAT_20_DYNAMIC + _CAT_10_DYNAMIC + _CAT_16_DYNAMIC
-    + _CAT_19_DYNAMIC + _CAT_18_DYNAMIC + _CAT_8_DYNAMIC
+    + _CAT_19_DYNAMIC + _CAT_18_DYNAMIC + _CAT_8_DYNAMIC + _CAT_9_DYNAMIC
+    + _CAT_17_DYNAMIC
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
@@ -487,7 +537,7 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/5/6/7/8/10/13/14/15/16/18/19/20/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/6/7/8/9/10/13/14/15/16/17/18/19/20/22 implemented; remaining categories in Phase 1.10b)."
         )
     return FEATURE_STABILITY[feature_name]
 
