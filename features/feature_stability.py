@@ -79,11 +79,22 @@ CURRENT TAGGING SCOPE:
     Cat 17  ( 6 features) — stats.py          [v2.0 trim 9→6 per Decision v2.50 Q19;
                                                all 6 dynamic. fractal_stats_features;
                                                self-contained.]
-  Total currently tagged: 239 features.
+    Cat 11  ( 6 features) — context.py        [v2.0 REWRITE 8→6 per Decision v2.51 Q20
+                                               + Decision v2.37 Q2 (literal prev-bar);
+                                               SECOND MIXED-BLOCK split: 4 static
+                                               (prev_bar_*) + 2 dynamic (today_*).
+                                               §7.5 LIST EDIT: Cat 11 moved from STATIC
+                                               list to MIXED list. Cat 11 + Cat 16 = two
+                                               mixed-split blocks.]
+    Cat 12  ( 5 features) — context.py        [v2.0 REWRITE 8→5 per Decision v2.51 Q20;
+                                               all 5 dynamic. lagged_dynamics_features;
+                                               caller-supplied rsi/adx/ema21_dist_pct.]
+  Total currently tagged: 250 features.
 
 PENDING TAGGING (Phase 1.10b — to be added when each modify-in-place file
 lands):
-    Cat 11 context, Cat 12 lagged.
+    (none — Phase 1.10b feature files all locked. Phase 1.10c indicators.py
+    refactor pending.)
   Each file edit appends to FEATURE_STABILITY when the feature names lock.
 """
 from __future__ import annotations
@@ -505,6 +516,47 @@ _CAT_17_DYNAMIC = [
 ]
 
 
+# ─── Cat 11 — Previous Context (6 features, MIXED-BLOCK split) ──────────
+# Per §7.2 Cat 11 + Decision v2.37 Q2 + Decision v2.51 Q20. Implemented in
+# features/context.py (`prev_context_features`). REWRITE 8→6: drop ALL 8
+# v1.0 prev-DAY features per Decision v2.37 Q2 (duplicates of Cat 2a HTF1D).
+# Per Decision v2.51 Q20.8 SECOND MIXED-BLOCK SPLIT: Cat 11 moved from
+# §7.5 STATIC list to MIXED list with explicit per-feature 4-static /
+# 2-dynamic split.
+#
+# STATIC (4) — `.shift(1)` lookups; locked once prev bar closed;
+# intrabar-safe.
+_CAT_11_STATIC = [
+    "prev_bar_close_vs_close_pct",
+    "prev_bar_high_vs_close_pct",
+    "prev_bar_low_vs_close_pct",
+    "prev_bar_volume_ratio",
+]
+# DYNAMIC (2) — depend on current close; today_high/today_low cummax/
+# cummin update intrabar.
+_CAT_11_DYNAMIC = [
+    "today_open_to_now_pct",
+    "today_high_low_distance_from_current_pct",
+]
+
+
+# ─── Cat 12 — Lagged Dynamics (5 features, all dynamic) ─────────────────
+# Per §7.2 Cat 12 + Decision v2.51 Q20. Implemented in features/context.py
+# (`lagged_dynamics_features`). REWRITE 8→5: drop ALL 8 v1.0 5bar-slope
+# features per spec (overlap Cat 1/2/5 or use lag windows that overlap
+# Cat 2a HTF context). Caller-supplied: rsi (Cat 1), adx (Cat 2),
+# ema21_dist_pct (Cat 2); volume from df.
+# All 5 features are deltas of dynamic source series → close-dependent
+# via the source series' close-dependence → uniformly dynamic.
+_CAT_12_DYNAMIC = [
+    "delta_rsi_1",
+    "delta_rsi_3",
+    "delta_adx_3",
+    "delta_volume_3",
+    "delta_close_vs_ema21_3",
+]
+
+
 # ─── Build flat dict ─────────────────────────────────────────────────────
 FEATURE_STABILITY: dict[str, Stability] = {}
 
@@ -513,13 +565,13 @@ for f in (
     + _CAT_15_DYNAMIC + _CAT_13_DYNAMIC + _CAT_4_DYNAMIC + _CAT_14_DYNAMIC
     + _CAT_5_DYNAMIC + _CAT_20_DYNAMIC + _CAT_10_DYNAMIC + _CAT_16_DYNAMIC
     + _CAT_19_DYNAMIC + _CAT_18_DYNAMIC + _CAT_8_DYNAMIC + _CAT_9_DYNAMIC
-    + _CAT_17_DYNAMIC
+    + _CAT_17_DYNAMIC + _CAT_11_DYNAMIC + _CAT_12_DYNAMIC
 ):
     FEATURE_STABILITY[f] = "dynamic"
 
 for f in (
     _CAT_2A_STATIC + _CAT_22_STATIC_OVERRIDE + _CAT_6_STATIC + _CAT_7_STATIC
-    + _CAT_16_STATIC
+    + _CAT_16_STATIC + _CAT_11_STATIC
 ):
     FEATURE_STABILITY[f] = "static"
 
@@ -537,7 +589,8 @@ def get_stability(feature_name: str) -> Stability:
         raise KeyError(
             f"Feature '{feature_name}' not tagged in FEATURE_STABILITY. "
             f"{len(FEATURE_STABILITY)} features tagged so far (Cat "
-            f"1/2/2a/3/4/5/6/7/8/9/10/13/14/15/16/17/18/19/20/22 implemented; remaining categories in Phase 1.10b)."
+            f"1/2/2a/3/4/5/6/7/8/9/10/11/12/13/14/15/16/17/18/19/20/22 implemented; "
+            f"all Phase 1.10b feature categories landed)."
         )
     return FEATURE_STABILITY[feature_name]
 
