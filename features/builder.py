@@ -213,22 +213,35 @@ def build_features(symbol: str, cfg: dict) -> pd.DataFrame:
     parts.append(htf_4h_mapped)
     parts.append(htf_1d_mapped)
 
-    # ── Phase F: Cat 22 Cross-Asset (6 features, alts only) ───────────
+    # ── Phase F: Cat 22 Cross-Asset (alts only — 7 cols emitted; 6 active
+    #             Phase 1 + 1 NaN-placeholder for btc_funding_rate Phase 3+) ─
     if is_btc:
         log.info("Phase F: Cat 22 cross-asset SKIPPED for BTC (no self-correlation)")
     else:
-        log.info("Phase F: Cat 22 cross-asset (6 features)")
+        log.info("Phase F: Cat 22 cross-asset (7 cols: 6 active + btc_funding_rate NaN-placeholder)")
         atr_btc = volatility.atr(
             df_btc_aligned["high"],
             df_btc_aligned["low"],
             df_btc_aligned["close"],
             14,
         )
+        # CORRECTION round 2 (Decision v2.54 Q22 + VPS Claude validation
+        # 2026-05-01): pass NaN-filled btc_funding Series so cross_asset
+        # emits btc_funding_rate as a stable column (NaN-valued during
+        # Phase 1; real Hyperliquid funding stream wired in Phase 3+).
+        # This keeps the alts feature schema column-stable across the
+        # Phase 1 → 3 transition AND aligns runtime emit count with
+        # feature_stability.py _CAT_22_DYNAMIC tag count (7 cols → 7 tags).
+        # Without this, cross_asset.py's conditional-emit semantics
+        # (feature only emitted when btc_funding is supplied) caused a
+        # schema-vs-tag off-by-one (alts emit 6, tags expect 7).
+        btc_funding_placeholder = pd.Series(float("nan"), index=df.index)
         cross_df = cross_asset.cross_asset_features(
             df_asset=df,
             df_btc=df_btc_aligned,
             atr_asset=vol_df["atr_14"],
             atr_btc=atr_btc,
+            btc_funding=btc_funding_placeholder,
         )
         parts.append(cross_df)
 
