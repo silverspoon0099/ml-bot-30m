@@ -152,7 +152,14 @@ def merge_htf_into_30m(
 def build_features(symbol: str, cfg: dict) -> pd.DataFrame:
     bcfg = cfg["data"]["binance"]
     fcfg = cfg["features"]
-    storage_dir = resolve_path(bcfg["storage_dir"])
+    # CORRECTION (Decision v2.54 Q22.1 + VPS Claude validation 2026-05-01):
+    # cfg points at data/storage/binance/; export_parquet.py writes parquet
+    # snapshots one level deeper at data/storage/binance/30m/<SYM>_30m.parquet
+    # (per spec §15 canonical layout). storage.ohlcv_path() appends only the
+    # filename, not the timeframe subdir. Prepend "/30m" here so both the
+    # primary asset load and the BTC sidecar load (alts only) hit the right
+    # snapshot directory.
+    storage_dir = resolve_path(bcfg["storage_dir"]) / "30m"
     coin = coin_from_symbol(symbol)
     is_btc = coin == "BTC"
 
