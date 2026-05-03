@@ -396,9 +396,13 @@ def add_labels(feature_matrix: pd.DataFrame, symbol: str, cfg: dict) -> pd.DataF
     lcfg = cfg["labeling"]
     coin = coin_from_symbol(symbol)
     min_profit = lcfg["min_profit_pct"].get(coin, 0.5)
+    # Decision v2.56 (DR-007) chop filter — per-asset threshold; falls back to
+    # 0.0 (no filter) for backward compat if config doesn't supply.
+    min_atr_pct = lcfg.get("min_atr_pct_threshold", {}).get(coin, 0.0)
     log.info(
         f"Triple-barrier labels: tp={lcfg['tp_atr_mult']}x, sl={lcfg['sl_atr_mult']}x, "
-        f"hold={lcfg['max_holding_bars']}, min_profit_pct={min_profit}"
+        f"hold={lcfg['max_holding_bars']}, min_profit_pct={min_profit}, "
+        f"min_atr_pct_threshold={min_atr_pct} (chop filter)"
     )
     labels = triple_barrier_labels(
         feature_matrix,
@@ -407,11 +411,28 @@ def add_labels(feature_matrix: pd.DataFrame, symbol: str, cfg: dict) -> pd.DataF
         sl_atr_mult=lcfg["sl_atr_mult"],
         max_holding_bars=lcfg["max_holding_bars"],
         min_profit_pct=min_profit,
+        min_atr_pct_threshold=min_atr_pct,
         classes=lcfg["classes"],
     )
     out = pd.concat([feature_matrix, labels], axis=1)
     dist = out["label"].value_counts().to_dict()
-    log.info(f"Label distribution: {dist}")
+    # Per Decision v2.56 §8.2 amendment: log distribution on filtered set
+    # (label ∈ {0, 1, 2}) plus chop-filter rate + unlabelable tail rate.
+    n_total = len(out)
+    filtered_set = out[out["label"].isin([0, 1, 2])]
+    n_filtered_set = len(filtered_set)
+    chop_rate = (out["label"] == -2).mean() * 100
+    unlabelable_rate = (out["label"] == -1).mean() * 100
+    log.info(f"Label distribution (full incl. sentinels): {dist}")
+    if n_filtered_set > 0:
+        filt_dist = filtered_set["label"].value_counts(normalize=True).to_dict()
+        log.info(
+            f"Filtered set (label ∈ {{0,1,2}}, n={n_filtered_set:,} of {n_total:,}): "
+            f"{ {k: f'{v*100:.2f}%' for k, v in filt_dist.items()} }"
+        )
+    log.info(
+        f"Chop-filter rate: {chop_rate:.2f}% | Unlabelable tail: {unlabelable_rate:.2f}%"
+    )
     return out
 
 
@@ -434,6 +455,10 @@ def main() -> None:
     if not args.no_label:
         matrix = add_labels(matrix, args.symbol, cfg)
         # Drop unlabelable tail rows (where the labeler ran out of forward-bars).
+        # Per Decision v2.56: KEEP label=-2 (CHOP_FILTERED) in parquet output for
+        # diagnostic visibility (chop-filter rate analysis, "what would model have
+        # done in chop?" backtest exploration). Phase 2 training pipeline filters
+        # `label.isin({0, 1, 2})` at fit time; backtest applies same filter.
         matrix = matrix[matrix["label"] != -1].reset_index(drop=True)
 
     out_dir = resolve_path(args.output_dir)

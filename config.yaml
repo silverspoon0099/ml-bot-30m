@@ -97,19 +97,27 @@ features:
 # Labeling — triple-barrier (§8.1)
 # ────────────────────────────────────────────────────────────────────
 labeling:
-  method: triple_barrier
-  tp_atr_mult:      3.0              # symmetric per Decision v2.7
-  sl_atr_mult:      3.0
+  method: triple_barrier_chop_filtered  # per Decision v2.56 / DR-007
+  tp_atr_mult:      2.5              # symmetric (tightened 3.0→2.5 per DR-007)
+  sl_atr_mult:      2.5
   max_holding_bars: 8                # 8 × 30m = 4 hours
   min_profit_pct:                    # timeout-gate only (§8.1)
-    BTC:  0.6
-    SOL:  0.9
-    LINK: 0.8
+    BTC:  0.3                        # LOWERED 0.6→0.3 per DR-007
+    SOL:  0.4                        # LOWERED 0.9→0.4 per DR-007
+    LINK: 0.4                        # LOWERED 0.8→0.4 per DR-007
+    # TAO/HYPE deferred per Decision v2.35
+  min_atr_pct_threshold:             # CHOP FILTER (NEW per DR-007)
+    BTC:  0.20                       # bars with atr_14/close × 100 < 0.20% → label = -2
+    SOL:  0.30                       # alts have higher base vol; chop floor wider
+    LINK: 0.30
     # TAO/HYPE deferred per Decision v2.35
   classes:
-    LONG:    0
-    SHORT:   1
-    NEUTRAL: 2
+    LONG:           0
+    SHORT:          1
+    NEUTRAL:        2
+    # CHOP_FILTERED = -2 (per Decision v2.56) and UNLABELABLE = -1 are sentinels
+    # not in classes dict; emitted directly by labeler. Builder filter:
+    # label.isin({0, 1, 2}) excludes both at training/inference time.
 
 # ────────────────────────────────────────────────────────────────────
 # Model — LightGBM 3-class (§9.3)
