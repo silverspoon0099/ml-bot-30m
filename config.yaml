@@ -97,17 +97,17 @@ features:
 # Labeling — triple-barrier (§8.1)
 # ────────────────────────────────────────────────────────────────────
 labeling:
-  method: triple_barrier_chop_filtered  # per Decision v2.56 / DR-007
-  tp_atr_mult:      2.5              # symmetric (tightened 3.0→2.5 per DR-007)
-  sl_atr_mult:      2.5
+  method: triple_barrier_chop_filtered  # per Decisions v2.56 + v2.59
+  tp_atr_mult:      2.4              # DR-008: 2.5→2.4 per Decision v2.59 (incremental tighten)
+  sl_atr_mult:      2.4              # symmetric
   max_holding_bars: 8                # 8 × 30m = 4 hours
   min_profit_pct:                    # timeout-gate only (§8.1)
     BTC:  0.3                        # LOWERED 0.6→0.3 per DR-007
     SOL:  0.4                        # LOWERED 0.9→0.4 per DR-007
     LINK: 0.4                        # LOWERED 0.8→0.4 per DR-007
     # TAO/HYPE deferred per Decision v2.35
-  min_atr_pct_threshold:             # CHOP FILTER (NEW per DR-007)
-    BTC:  0.20                       # bars with atr_14/close × 100 < 0.20% → label = -2
+  min_atr_pct_threshold:             # CHOP FILTER (per DR-007 / Decision v2.56)
+    BTC:  0.25                       # DR-008: 0.20→0.25 per Decision v2.59 (more selective)
     SOL:  0.30                       # alts have higher base vol; chop floor wider
     LINK: 0.30
     # TAO/HYPE deferred per Decision v2.35
