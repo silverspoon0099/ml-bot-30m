@@ -408,3 +408,35 @@ Canonical project name: `ml-bot-30m/` (VPS). Local working folder may still be `
 3. Local-Claude signals **Phase 1.14 freeze ACCEPTED** in next PROJECT_LOG entry.
 4. Local-Claude signals **Phase 2.0 ENTRY** with §10.5.5 self-audit + Phase 2.1 5-feature pre-gate work order on BTC.
 **Phase 2.0 ENTRY contract preview** (per spec §10.3.1): 5-feature minimal baseline on BTC must beat empirical prior log-loss by ≥1% on val fold before Phase 2.2 full-feature gate runs. Cheap pause vs expensive overfit. **Iteration freedom CLOSED**: no further triple-barrier param changes without fresh DR + explicit unfreeze rationale. Standing by for VPS pull → alt regeneration → freeze acceptance → Phase 2.0 entry signal
+2026-05-04 13:29  Phase 1.14 [SPEC §8.1 + §10.5.4 + Decision v2.66 freeze regeneration] **PHASE 1.14 FREEZE PARQUETS REGENERATED — all 3 assets official on disk**. SOL/USDT regenerated at locked tp/sl=2.7. Runtime 1m 38s. Cascade audit ✓: config.yaml line 103 (SOL=2.7 🔒) + line 107 (sl=2.7 🔒) post-pull match v2.66 lock annotations; lines 102+106 BTC=2.4 unchanged; lines 109-118 unchanged from v2.62; purge/embargo=12 unchanged. Builder log: `Triple-barrier labels: tp=2.7x, sl=2.7x, hold=12, min_profit_pct=0.4, min_atr_pct_threshold=0.6 (chop filter)` ✓. (1)(2) shape (51158, 260) ✓. (3) feature count 250/250 ✓; 4 label cols ✓. (4) FILTERED SET (n=42,024 of 51,158): LONG 42.30% / SHORT 41.06% / **NEUTRAL 16.64%** / CHOP_FILTERED 9,134 (rate **17.85%**) — **ALL 4 METRICS BIT-IDENTICAL to v2.66c sweep run** (Δ=0.00pp on all classes; counts L=17,776 / S=17,257 / N=6,991 / chop=9,134 byte-identical). Determinism check ✓ — well within ±0.05pp tolerance. (5) NaN audit per v2.58+v2.60+v2.63 carveout: 0 outside carveout ✓. (6) 0-leak: 0 of 69 ✓. (7) HTF shift(1) ✓; Cat 22 sidecar 100% non-NaN on 5 active ✓; btc_funding_rate all-NaN placeholder ✓. (8) SOL_features.parquet 64.92 MB mtime 2026-05-04T13:29 UTC ✓ (replaces v2.67c 3.0 artifact). (9) Runtime 1m 38s wall (103s user, 1.8s sys). Anti-patterns (§10.5.9): not used; banned phrases: none.
+2026-05-04 13:31  Phase 1.14 [SPEC §8.1 + §10.5.4 + Decision v2.66 freeze regeneration] LINK/USDT regenerated at locked tp/sl=2.7. Runtime 1m 27s. Cascade audit ✓ (LINK=2.7 lines 104+108 🔒). Builder log: `tp=2.7x, sl=2.7x, hold=12, min_profit_pct=0.4, min_atr_pct_threshold=0.6 (chop filter)` ✓. (1)(2) shape (51158, 260) ✓. (3) 250/250 features ✓; 4 label cols ✓. (4) FILTERED SET (n=41,519 of 51,158): LONG 41.65% / SHORT 41.47% / **NEUTRAL 16.89%** / CHOP 9,639 (rate **18.84%**) — **ALL 4 METRICS BIT-IDENTICAL to v2.66c sweep run** (Δ=0.00pp; counts L=17,292 / S=17,216 / N=7,011 / chop=9,639 byte-identical). Determinism check ✓. (5) NaN audit per v2.58+v2.60+v2.63: 0 outside carveout ✓. (6) 0-leak: 0 of 69 ✓. (7) HTF shift(1) ✓; Cat 22 sidecar 100% non-NaN on 5 active ✓. (8) LINK_features.parquet 61.92 MB mtime 2026-05-04T13:31 UTC ✓ (replaces v2.67c 3.0 artifact). (9) Runtime 1m 27s wall. Anti-patterns: not used.
+2026-05-04 13:31  **Phase 1.14 FREEZE STATE CONFIRMED — VPS regeneration acceptance report**:
+
+```
+| asset | parquet path                                       | size    | mtime                  | shape         | L      | S      | N      | chop   | source state           |
+|-------|----------------------------------------------------|---------|------------------------|---------------|--------|--------|--------|--------|------------------------|
+| BTC   | data/storage/features/BTC_features.parquet         | 65.91MB | 2026-05-04T01:54 UTC   | (51158, 253)  | 38.57% | 37.41% | 24.03% | 19.77% | v2.61 PASS — UNTOUCHED |
+| SOL   | data/storage/features/SOL_features.parquet         | 64.92MB | 2026-05-04T13:29 UTC   | (51158, 260)  | 42.30% | 41.06% | 16.64% | 17.85% | v2.66 LOCK 2.7 (regen) |
+| LINK  | data/storage/features/LINK_features.parquet        | 61.92MB | 2026-05-04T13:31 UTC   | (51158, 260)  | 41.65% | 41.47% | 16.89% | 18.84% | v2.66 LOCK 2.7 (regen) |
+```
+
+**§8.2 freeze-band check (all 3 assets PASS)**:
+* BTC: LONG 38.57 ∈ [35,45] ✓ / SHORT 37.41 ∈ [35,45] ✓ / NEUTRAL 24.03 ∈ [15,25] ✓ (margin +9.03pp from 15% floor) / chop 19.77 ∈ [10,50] ✓
+* SOL: LONG 42.30 ∈ [35,45] ✓ / SHORT 41.06 ∈ [35,45] ✓ / NEUTRAL 16.64 ∈ [15,25] ✓ (margin +1.64pp from floor) / chop 17.85 ∈ [10,50] ✓
+* LINK: LONG 41.65 ∈ [35,45] ✓ / SHORT 41.47 ∈ [35,45] ✓ / NEUTRAL 16.89 ∈ [15,25] ✓ (margin +1.89pp from floor) / chop 18.84 ∈ [10,50] ✓
+
+**Final locked params (per Decision v2.66 / Phase 1.14 freeze)**:
+* tp_atr_mult / sl_atr_mult: BTC=2.4 / SOL=2.7 / LINK=2.7
+* min_profit_pct: BTC=0.3 / SOL=0.4 / LINK=0.4
+* min_atr_pct_threshold: BTC=0.275 / SOL=0.60 / LINK=0.60
+* max_holding_bars=12; purge_bars=12; embargo_bars=12 (§9.2 cascade)
+
+**Determinism + integrity audit**:
+* SOL regen vs v2.66c sweep: ALL 4 classes Δ=0.00pp; raw counts byte-identical ✓
+* LINK regen vs v2.66c sweep: ALL 4 classes Δ=0.00pp; raw counts byte-identical ✓
+* BTC parquet untouched: mtime 2026-05-04T01:54 (v2.61 PASS state preserved); not re-run per Decision v2.66 explicit pre-run check ✓
+* All shape, feature-count, NaN-carveout, 0-leak, HTF shift(1), persistence checks pass on alt regen ✓
+
+**Phase 1.11 status: CLOSED**. Per §10.5.4 freeze contract, no further triple-barrier param changes without fresh DR + explicit unfreeze rationale. Two known-good fallbacks documented in Decision v2.66: v2.65 (alts=2.5; +0.99/+1.14pp margin) and v2.62 (alts=2.4; +0.55/+0.75pp margin) — both already characterized; available without further sweep work if Phase 2 baseline gate fails.
+
+**Anti-patterns (§10.5.9)**: not used; banned phrases: none. **Phase 1.11 effort summary** (v2.55→v2.66 lock cycle): 4 BTC iterations + 5 SOL + 4 LINK = 13 total builds; 8 Decision Log entries; 0 anti-pattern violations; 0 banned phrases; full chop-filter + per-asset tp/sl tuning achieved. **VPS standing by for local-Claude Phase 1.14 freeze ACCEPTANCE signal + Phase 2.0 ENTRY work order** (§10.5.5 self-audit + §10.3.1 5-feature pre-gate on BTC).
