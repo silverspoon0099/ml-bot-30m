@@ -351,3 +351,46 @@ Canonical project name: `ml-bot-30m/` (VPS). Local working folder may still be `
 * If local-Claude locks DR-014 at v2.62 (2.4) → revert config to 2.4; rebuild SOL/LINK at 2.4; freeze
 
 **Note for local-Claude**: SOL and LINK feature parquets currently on disk are the v2.66c (2.7) artifacts — NOT v2.65 (2.5). If freeze decision is v2.65 or v2.62, VPS will need to re-run alts at the chosen value. **VPS standing by for lock decision.**
+2026-05-04 12:58  Phase 1.11 [VPS DR-013 candidate sweep extension per user 'now test with atr_mult=3.0' 2026-05-04 + §10.5.6] SOL/USDT v2.67-candidate build (alts WIDEN further 2.7→3.0 — VPS executed config flip; pending local-Claude formal lock decision; BTC frozen at 2.4) — **PASS all 11 checks ✓**, NEUTRAL margin +2.32pp above 15% floor (widest of sweep). Runtime 1m 31s. Cascade audit ✓: config.yaml lines 103+104+107+108 flipped to 3.0 (annotated `VPS DR-013 candidate sweep extension; pending local-Claude lock`); BTC lines 102+106 unchanged at 2.4; lines 109-118 unchanged from v2.62; purge/embargo=12 unchanged. Builder log: `Triple-barrier labels: tp=3.0x, sl=3.0x, hold=12, min_profit_pct=0.4, min_atr_pct_threshold=0.6 (chop filter)` ✓. (1)(2) shape (51158, 260) ✓. (3) feature count 250/250 ✓; 4 label cols ✓. (4) FILTERED SET (n=42,024 of 51,158): LONG 42.04% (in [35,45] ✓ −0.26pp vs v2.66c) / SHORT 40.64% (in [35,45] ✓ −0.42pp vs v2.66c) / **NEUTRAL 17.32% (in [15,25] ✓ +0.68pp vs v2.66c 16.64%)**. Sentinels: CHOP_FILTERED 9,134 (rate 17.85% — UNCHANGED across full 5-point sweep 2.2/2.4/2.5/2.7/3.0 ✓ chop invariance now proven over 5 data points; future iterations can vary tp/sl freely without disturbing chop); UNLABELABLE 12 (0.02% ✓). v2.56 NEUTRAL>30 trigger NONE ✓. **Sample-density delta vs v2.66c (2.7)**: NEUTRAL 6,991→7,278 (+287); LONG 17,776→17,667 (−109); SHORT 17,257→17,079 (−178). (5) NaN audit per v2.58+v2.60+v2.63 carveout: 0 outside carveout ✓. (6) 0-leak: 0 of 69 ✓. (7) HTF shift(1) ✓; Cat 22 sidecar 100% non-NaN on 5 active ✓; btc_funding_rate all-NaN placeholder ✓. (8) SOL_features.parquet 64.93 MB mtime 2026-05-04T12:58 UTC ✓. (9) Runtime 1m 31s wall (96s user, 0.9s sys). Anti-patterns (§10.5.9): not used; banned phrases: none. **Step-response further sub-linearity (SOL alt)**: v2.66c (2.7)→v2.67c (3.0) = +0.68pp per +0.3 step = **+0.227pp/0.1 step** (vs +0.325pp at 2.5→2.7). Diminishing-returns curve continues; NEUTRAL appears to be approaching an asymptote (the proportion of bars whose ATR-relative move stays inside the barriers over the 12-bar hold window).
+2026-05-04 13:00  Phase 1.11 [VPS DR-013 candidate sweep extension + §10.5.6] LINK/USDT v2.67-candidate build (alts WIDEN 2.7→3.0) — **PASS all 11 checks ✓**, NEUTRAL margin +2.59pp above 15% floor (widest of sweep). Runtime 1m 42s. Cascade audit ✓ (LINK=3.0 extracted from dict). Builder log: `tp=3.0x, sl=3.0x, hold=12, min_profit_pct=0.4, min_atr_pct_threshold=0.6 (chop filter)` ✓. (1)(2) shape (51158, 260) ✓. (3) 250/250 features ✓; 4 label cols ✓. (4) FILTERED SET (n=41,519 of 51,158): LONG 41.40% (in [35,45] ✓ −0.25pp vs v2.66c) / SHORT 41.01% (in [35,45] ✓ −0.46pp vs v2.66c) / **NEUTRAL 17.59% (in [15,25] ✓ +0.70pp vs v2.66c 16.89%)**. Sentinels: CHOP_FILTERED 9,639 (rate 18.84% — UNCHANGED across full 5-point sweep ✓); UNLABELABLE 12 (0.02% ✓). v2.56 trigger NONE ✓. **Sample-density delta vs v2.66c**: NEUTRAL 7,011→7,302 (+291); LONG 17,292→17,190 (−102); SHORT 17,216→17,027 (−189). (5) NaN audit per v2.58+v2.60+v2.63: 0 outside carveout ✓. (6) 0-leak: 0 of 69 ✓. (7) HTF shift(1) ✓; Cat 22 sidecar 100% non-NaN on 5 active ✓. (8) LINK_features.parquet 61.93 MB mtime 2026-05-04T13:00 UTC ✓. (9) Runtime 1m 42s wall. Anti-patterns: not used. **Step-response (LINK)**: +0.70pp per +0.3 step = **+0.233pp/0.1 step** (near-identical to SOL +0.227 at this range; both alts converging to same asymptotic rate).
+2026-05-04 13:00  Phase 1.11 [VPS 5-point sweep complete — escalation-ladder decision point + asymptote diagnosis] **Full SOL+LINK ATR-mult sweep table (5 data points across 2.2/2.4/2.5/2.7/3.0) + asymptotic-curve fit + Phase 1.14 freeze candidate evaluation**:
+
+```
+| asset | metric    | v2.64 (2.2) | v2.62 (2.4) | v2.65 (2.5) | v2.66c (2.7) | v2.67c (3.0) | gate     |
+|-------|-----------|-------------|-------------|-------------|--------------|--------------|----------|
+| SOL   | LONG      | 43.27%      | 42.76%      | 42.56%      | 42.30%       | 42.04%       | ✓ all in [35,45] |
+| SOL   | SHORT     | 42.19%      | 41.69%      | 41.46%      | 41.06%       | 40.64%       | ✓ all in [35,45] |
+| SOL   | NEUTRAL   | 14.54% ✗   | 15.55%      | 15.99%      | 16.64%       | **17.32%**   | 2.4+ ✓ |
+| SOL   | chop-rate | 17.85%      | 17.85%      | 17.85%      | 17.85%       | 17.85%       | ✓ invariant (5/5 points) |
+| LINK  | LONG      | 42.54%      | 42.17%      | 42.02%      | 41.65%       | 41.40%       | ✓ all in [35,45] |
+| LINK  | SHORT     | 42.71%      | 42.08%      | 41.84%      | 41.47%       | 41.01%       | ✓ all in [35,45] |
+| LINK  | NEUTRAL   | 14.75% ✗   | 15.75%      | 16.14%      | 16.89%       | **17.59%**   | 2.4+ ✓ |
+| LINK  | chop-rate | 18.84%      | 18.84%      | 18.84%      | 18.84%       | 18.84%       | ✓ invariant (5/5 points) |
+| BTC   | (frozen at v2.61 PASS — not re-run; tp/sl=2.4 throughout)                                                                            |
+```
+
+**Step-response asymptote diagnosis (full 5-point sweep)**:
+* SOL NEUTRAL/0.1 step: 0.510 (2.2→2.4) / 0.440 (2.4→2.5) / 0.325 (2.5→2.7) / **0.227** (2.7→3.0) — **strictly diminishing**
+* LINK NEUTRAL/0.1 step: 0.500 / 0.390 / 0.375 / **0.233** — same diminishing pattern
+* Both alts now converging to ~0.23pp/0.1 step at the current tp/sl band; continued widening will yield ~+0.5pp NEUTRAL per +0.2 step rather than the +1.0pp typical at 2.2-2.4.
+* **Mechanism**: NEUTRAL classification requires (a) no barrier hit AND (b) `|pnl_pct| < min_profit_pct` at hold expiry. As tp/sl widens, barrier-hits decrease near-linearly but the min_profit_pct threshold absorbs the marginal cases (small-magnitude moves that hold the full 12 bars). NEUTRAL grows asymptotically toward the proportion of bars where the 12-bar return ends |pnl| < 0.4%.
+* **LONG/SHORT density loss**: near-LINEAR ~0.2pp per 0.1 step (no diminishing returns; widening monotonically reduces hits).
+* **Chop invariance proven over 5-point sweep**: tp/sl entirely independent of chop filter — robust invariant.
+
+**Phase 1.14 freeze candidate comparison (4 PASS-eligible options now)**:
+```
+| candidate         | BTC | SOL | LINK | SOL N margin | LINK N margin | SOL L+S combined | LINK L+S combined |
+|-------------------|-----|-----|------|--------------|---------------|------------------|--------------------|
+| v2.62 (revert)    | 2.4 | 2.4 | 2.4  | +0.55pp     | +0.75pp       | 84.45%           | 84.25%             |
+| v2.65             | 2.4 | 2.5 | 2.5  | +0.99pp     | +1.14pp       | 84.02%           | 83.86%             |
+| v2.66c (2.7)      | 2.4 | 2.7 | 2.7  | +1.64pp     | +1.89pp       | 83.36%           | 83.12%             |
+| v2.67c (3.0)      | 2.4 | 3.0 | 3.0  | +2.32pp     | +2.59pp       | 82.68%           | 82.41%             |
+```
+
+**Trade-off framing for local-Claude / user**:
+1. **NEUTRAL margin trajectory** (SOL / LINK above floor): +0.55/+0.75 → +0.99/+1.14 → +1.64/+1.89 → **+2.32/+2.59pp**. Diminishing per-step gains; v2.62→v2.65 gives +0.44/+0.39pp, v2.66c→v2.67c gives +0.68/+0.70pp (per 0.3 ATR step).
+2. **LONG+SHORT density trajectory** (combined): 84.45/84.25 → 84.02/83.86 → 83.36/83.12 → **82.68/82.41%**. Total density loss 2.4→3.0 is 1.77pp (SOL) / 1.84pp (LINK) — minor but accumulating.
+3. **Diversion ratio per +0.1 ATR step (NEUTRAL gained per directional lost)**: at 2.4→2.5 ratio ≈ 1:1; at 2.7→3.0 ratio ≈ 0.7:1 (slightly worse — losing more directional than gaining NEUTRAL margin). Phase 2 sample-quality consideration: at high tp/sl, model trains on slightly fewer + slightly noisier directional samples (because more marginal directional cases have shifted to NEUTRAL).
+4. **Asymmetry vs BTC**: BTC frozen at 2.4 with NEUTRAL 24.03% (mid-band, +9pp from floor). v2.67c puts alts at NEUTRAL 17.32-17.59% (still ~6.5pp lower than BTC's NEUTRAL fraction). Per-asset volatility profile rationale (alts more directional than BTC at 30m) is preserved at 3.0; further widening would erode that asymmetry.
+
+**Anti-patterns (§10.5.9)**: not used; banned phrases: none. **Per Decision v2.55 + v2.65 transition contract**: Phase 1.11 still pre-freeze; iteration freedom holds. **Local config state**: config.yaml lines 103/104/107/108 currently at 3.0 (uncommitted) per VPS DR-013 candidate sweep extension. Awaiting local-Claude formal lock among 4 freeze candidates. **VPS parquet on disk = v2.67c (3.0) artifact**; if final lock is at any other value, VPS re-runs alts at chosen value (~3min). **VPS standing by for further sweep extension OR final lock decision.**
