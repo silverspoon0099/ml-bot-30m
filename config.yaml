@@ -97,9 +97,15 @@ features:
 # Labeling — triple-barrier (§8.1)
 # ────────────────────────────────────────────────────────────────────
 labeling:
-  method: triple_barrier_chop_filtered  # per Decisions v2.56 + v2.59 + v2.61
-  tp_atr_mult:      2.4              # UNCHANGED from v2.59 (DR-009 paused linear-ATR ladder)
-  sl_atr_mult:      2.4              # symmetric
+  method: triple_barrier_chop_filtered  # per Decisions v2.56 + v2.59 + v2.61 + v2.64
+  tp_atr_mult:                       # DR-011: PER-ASSET dict per Decision v2.64 (was scalar 2.4 in v2.61)
+    BTC:  2.4                        # frozen at v2.61 PASS state — DO NOT perturb
+    SOL:  2.2                        # DR-011: 2.4→2.2 alts-only experiment
+    LINK: 2.2                        # same as SOL initially; differentiate in DR-012 if needed
+  sl_atr_mult:                       # PER-ASSET dict (symmetric with tp)
+    BTC:  2.4                        # frozen at v2.61 PASS
+    SOL:  2.2                        # DR-011: 2.4→2.2 alts-only
+    LINK: 2.2
   max_holding_bars: 12               # DR-009: 8→12 per Decision v2.61 (4hr → 6hr structural extension; cascades to walk_forward purge_bars + embargo_bars)
   min_profit_pct:                    # timeout-gate only (§8.1)
     BTC:  0.3                        # LOWERED 0.6→0.3 per DR-007

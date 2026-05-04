@@ -392,6 +392,18 @@ def build_features(symbol: str, cfg: dict) -> pd.DataFrame:
     return feature_matrix
 
 
+def _resolve_per_asset(value, coin: str, fallback=None):
+    """Per Decision v2.64 (DR-011): tp/sl_atr_mult migrate from scalar to
+    per-asset dict (matching pattern of min_profit_pct + min_atr_pct_threshold).
+    This helper accepts BOTH scalar (legacy v2.61 and earlier) AND dict
+    (v2.64+) for backward compat. If value is a dict, lookup by coin with
+    fallback; if scalar, return as-is.
+    """
+    if isinstance(value, dict):
+        return value.get(coin, fallback)
+    return value
+
+
 def add_labels(feature_matrix: pd.DataFrame, symbol: str, cfg: dict) -> pd.DataFrame:
     lcfg = cfg["labeling"]
     coin = coin_from_symbol(symbol)
@@ -399,16 +411,20 @@ def add_labels(feature_matrix: pd.DataFrame, symbol: str, cfg: dict) -> pd.DataF
     # Decision v2.56 (DR-007) chop filter — per-asset threshold; falls back to
     # 0.0 (no filter) for backward compat if config doesn't supply.
     min_atr_pct = lcfg.get("min_atr_pct_threshold", {}).get(coin, 0.0)
+    # Decision v2.64 (DR-011) per-asset tp/sl_atr_mult schema; helper accepts
+    # both legacy scalar form and v2.64 dict form.
+    tp_mult = _resolve_per_asset(lcfg["tp_atr_mult"], coin, fallback=2.5)
+    sl_mult = _resolve_per_asset(lcfg["sl_atr_mult"], coin, fallback=2.5)
     log.info(
-        f"Triple-barrier labels: tp={lcfg['tp_atr_mult']}x, sl={lcfg['sl_atr_mult']}x, "
+        f"Triple-barrier labels: tp={tp_mult}x, sl={sl_mult}x, "
         f"hold={lcfg['max_holding_bars']}, min_profit_pct={min_profit}, "
         f"min_atr_pct_threshold={min_atr_pct} (chop filter)"
     )
     labels = triple_barrier_labels(
         feature_matrix,
         atr_col="atr_14",
-        tp_atr_mult=lcfg["tp_atr_mult"],
-        sl_atr_mult=lcfg["sl_atr_mult"],
+        tp_atr_mult=tp_mult,
+        sl_atr_mult=sl_mult,
         max_holding_bars=lcfg["max_holding_bars"],
         min_profit_pct=min_profit,
         min_atr_pct_threshold=min_atr_pct,
