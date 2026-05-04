@@ -107,9 +107,9 @@ labeling:
     LINK: 0.4                        # LOWERED 0.8→0.4 per DR-007
     # TAO/HYPE deferred per Decision v2.35
   min_atr_pct_threshold:             # CHOP FILTER (per DR-007 / Decision v2.56)
-    BTC:  0.275                      # DR-009: 0.25→0.275 per Decision v2.61 (incremental +0.025pp)
-    SOL:  0.30                       # alts have higher base vol; chop floor wider
-    LINK: 0.30
+    BTC:  0.275                      # DR-009: 0.25→0.275 per Decision v2.61 (PASSED v2.61 BTC build)
+    SOL:  0.60                       # DR-010: 0.30→0.60 per Decision v2.62 (alt empirical recalibration; SOL ATR/Price profile higher than BTC)
+    LINK: 0.60                       # DR-010: 0.30→0.60 per Decision v2.62 (same as SOL initially; differentiate in DR-011 if LINK off-band)
     # TAO/HYPE deferred per Decision v2.35
   classes:
     LONG:           0
