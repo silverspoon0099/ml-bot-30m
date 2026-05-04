@@ -2134,15 +2134,15 @@ Claude and user both tick items. No item is marked ✅ without spec-section cita
 | 1.10 | Trim per-category outputs per §7.2 deltas                                 | §7.2      | ☐      |
 | 1.11 | Tag every feature static/dynamic in `feature_stability.py`               | §7.5      | ☐      |
 | 1.12 | Triple-barrier labels with v2.0 params                                    | §8.1      | ☐      |
-| 1.13 | Label distribution sanity check (LONG/SHORT 35–45%, NEUTRAL 15–25%)       | §8.2      | ☐      |
-| 1.14 | **FREEZE:** feature matrix + label column written to parquet              | §10.5.4   | ☐      |
+| 1.13 | Label distribution sanity check (LONG/SHORT 35–45%, NEUTRAL 15–25%)       | §8.2      | ☑ 2026-05-04 — Decision v2.66 freeze accepted; BTC/SOL/LINK all in band per filtered-set distribution |
+| 1.14 | **FREEZE:** feature matrix + label column written to parquet              | §10.5.4   | ☑ 2026-05-05 — VPS regeneration confirmed bit-identical to v2.66c sweep; Phase 1.14 ACCEPTED |
 
 ### Phase 2 — Baseline Gates + Walk-Forward + Tuning + Trim + Freeze
 
 | Step | Action                                                                    | Spec ref  | Status |
 | ---- | ------------------------------------------------------------------------- | --------- | ------ |
-| 2.0  | Self-audit: state current position per §10.5.5                           | §10.5.5   | ☐      |
-| 2.1  | Pre-gate: 5-feature baseline on BTC (val log-loss ≥1% better than prior)  | §10.3.1   | ☐      |
+| 2.0  | Self-audit: state current position per §10.5.5                           | §10.5.5   | ☑ 2026-05-05 — local-Claude session-start statement (Phase 2 entry) |
+| 2.1  | Pre-gate: 5-feature baseline on BTC (val log-loss ≥1% better than prior)  | §10.3.1   | ⏳ in progress — VPS work order issued 2026-05-05 |
 | 2.2  | Full-gate: ~202-feature baseline (val log-loss ≥2% better than prior)     | §10.3.2   | ☐      |
 | 2.3  | Walk-forward on BTC (14 folds)                                            | §9.2      | ☐      |
 | 2.4  | Optuna search (50 trials, folds [1, 7, 13])                              | §9.4      | ☐      |
