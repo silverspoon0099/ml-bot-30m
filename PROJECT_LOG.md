@@ -207,3 +207,46 @@ Canonical project name: `ml-bot-30m/` (VPS). Local working folder may still be `
 * (HALT — chop shifted) flag for diagnosis (chop should be invariant to tp/sl)
 * (HALT — shape/0-leak/NaN regression) code investigation
 **Phase 1.14 freeze contract**: only after this experiment lands AND user accepts the per-asset tp/sl values, the feature matrix + label parquets for all 3 assets freeze for Phase 2 training (per spec §10.5.4). **Iteration freedom**: Phase 1.11 still may iterate freely on triple-barrier params per Decision v2.55 + v2.56 + v2.59 + v2.61 + v2.62 + v2.64; OOT one-shot rule does NOT apply yet (Phase 2.10 boundary). Standing by for VPS pull → SOL re-run report → LINK re-run report → 5-tier matrix evaluation
+2026-05-04 12:00  Phase 1.11 [SPEC §8.1 Decision v2.64 (DR-011) + §10.5.6] SOL/USDT v2.64 build (alts-only tp/sl 2.4→2.2 experiment, BTC frozen) — **HALT-BORDERLINE (tier b: judgment call)**, NEUTRAL 14.54% breaches §8.2 floor by 0.46pp; LONG/SHORT in band; chop invariant ✓. Runtime 1m 40s. Cascade audit ✓: config.yaml lines 101-108 confirmed per-asset dict schema (BTC/SOL/LINK 2.4/2.2/2.2 tp+sl), lines 109-118 unchanged from v2.62, lines 161-162 purge/embargo=12 unchanged. Builder log: `Triple-barrier labels: tp=2.2x, sl=2.2x, hold=12, min_profit_pct=0.4, min_atr_pct_threshold=0.6 (chop filter)` ✓ — `_resolve_per_asset()` helper per Decision v2.64 correctly extracted SOL=2.2 from dict. (1)(2) shape (51158, 260) ✓ unchanged from v2.62. (3) feature count 250/250 ✓; 4 label cols ✓. (4) FILTERED SET (n=42,024 of 51,158): LONG 43.27% (in [35,45] ✓ +0.51pp vs v2.62) / SHORT 42.19% (in [35,45] ✓ +0.50pp) / **NEUTRAL 14.54% (✗ −0.46pp under [15,25] floor; −1.01pp vs v2.62 15.55%)**. Sentinels: CHOP_FILTERED 9,134 (rate 17.85% — UNCHANGED from v2.62 ✓ confirms chop independence from tp/sl per Decision v2.64 invariant); UNLABELABLE 12 (0.02% ✓). v2.56 NEUTRAL>30 trigger NONE ✓. **Sample-density delta**: NEUTRAL 6,536→6,110 (−426); LONG 17,968→18,183 (+215); SHORT 17,520→17,731 (+211). Net effect: 426 NEUTRAL bars reclassified to directional (~50/50 split). (5) NaN audit per v2.58+v2.60+v2.63 carveout: 0 outside carveout ✓. (6) 0-leak: 0 of 69 ✓. (7) HTF shift(1) sanity ✓; Cat 22 BTC sidecar 100% non-NaN on 5 active features ✓; btc_funding_rate all-NaN placeholder ✓. (8) SOL_features.parquet 64.97 MB mtime 2026-05-04T12:00 UTC ✓. (9) Runtime 1m 40s wall (105s user, 1.9s sys). Anti-patterns (§10.5.9): not used; banned phrases: none. **Empirical step calibration**: BTC ladder gave −1.80pp NEUTRAL per 0.1 ATR step; SOL alt actual was −1.01pp per 0.2 ATR step (i.e. −0.51pp per 0.1 step). Alts respond ~3.5× LESS aggressively than BTC to barrier tightening; this informs DR-012 sizing if local-Claude triggers revert/reduce.
+2026-05-04 12:01  Phase 1.11 [SPEC §8.1 Decision v2.64 (DR-011) + §10.5.6] LINK/USDT v2.64 build (alts-only tp/sl 2.4→2.2 experiment) — **HALT-BORDERLINE (tier b: judgment call)**, NEUTRAL 14.75% breaches §8.2 floor by 0.25pp; LONG/SHORT in band; chop invariant ✓. Runtime 1m 27s. Cascade audit ✓ (same as SOL above; LINK=2.2 extracted from dict). Builder log: `tp=2.2x, sl=2.2x, hold=12, min_profit_pct=0.4, min_atr_pct_threshold=0.6 (chop filter)` ✓. (1)(2) shape (51158, 260) ✓. (3) 250/250 features ✓; 4 label cols ✓. (4) FILTERED SET (n=41,519 of 51,158): LONG 42.54% (in [35,45] ✓ +0.37pp vs v2.62) / SHORT 42.71% (in [35,45] ✓ +0.63pp) / **NEUTRAL 14.75% (✗ −0.25pp under [15,25] floor; −1.00pp vs v2.62 15.75%)**. Sentinels: CHOP_FILTERED 9,639 (rate 18.84% — UNCHANGED from v2.62 ✓); UNLABELABLE 12 (0.02% ✓). v2.56 NEUTRAL>30 trigger NONE ✓. **Sample-density delta**: NEUTRAL 6,545→6,125 (−420); LONG 17,520→17,661 (+141); SHORT 17,454→17,733 (+279). Net: 420 NEUTRAL bars reclassified to directional (skewed slightly to SHORT 67% vs LONG 33%). (5) NaN audit per v2.58+v2.60+v2.63: 0 outside carveout ✓. (6) 0-leak: 0 of 69 ✓. (7) HTF shift(1) ✓; Cat 22 sidecar 100% non-NaN on 5 active ✓; btc_funding_rate all-NaN placeholder ✓. (8) LINK_features.parquet 61.97 MB mtime 2026-05-04T12:01 UTC ✓. (9) Runtime 1m 27s wall. Anti-patterns: not used. **LINK alt step calibration**: −1.00pp per 0.2 ATR step (−0.50pp per 0.1 step), near-identical to SOL's −0.51pp/0.1 — confirms shared alt-vol-class response curve.
+2026-05-04 12:01  Phase 1.11 [Decision v2.64 5-tier matrix evaluation per VPS DR-011 framing] **DR-011 EXPERIMENT RESULT TABLE + tier-(b) judgment escalation to local-Claude**:
+
+```
+| asset | metric    | v2.62 (2.4)  | v2.64 (2.2)  | Δ        | band [target]  | gate     |
+|-------|-----------|--------------|--------------|----------|----------------|----------|
+| SOL   | LONG      | 42.76%       | 43.27%       | +0.51pp  | [35,45]        | ✓        |
+| SOL   | SHORT     | 41.69%       | 42.19%       | +0.50pp  | [35,45]        | ✓        |
+| SOL   | NEUTRAL   | 15.55%       | 14.54%       | −1.01pp  | [15,25]        | ✗ −0.46pp under floor |
+| SOL   | chop-rate | 17.85%       | 17.85%       |  0.00pp  | [10,50]        | ✓ (invariant) |
+| LINK  | LONG      | 42.17%       | 42.54%       | +0.37pp  | [35,45]        | ✓        |
+| LINK  | SHORT     | 42.08%       | 42.71%       | +0.63pp  | [35,45]        | ✓        |
+| LINK  | NEUTRAL   | 15.75%       | 14.75%       | −1.00pp  | [15,25]        | ✗ −0.25pp under floor |
+| LINK  | chop-rate | 18.84%       | 18.84%       |  0.00pp  | [10,50]        | ✓ (invariant) |
+| BTC   | (frozen at v2.61 PASS — not re-run per Decision v2.64 explicit pre-run check) |
+```
+
+**5-tier matrix outcome (per Decision v2.64 + VPS DR-011 framing line 197):**
+* (a) **PASS in band**: NO — both alts NEUTRAL <15% target floor
+* (b) **NEUTRAL 13-15% borderline + LONG/SHORT well-balanced**: **YES — both SOL (14.54%) and LINK (14.75%) fall in this tier**
+* (c) NEUTRAL <13% or LONG/SHORT >45%: NO — alts NEUTRAL 14.5-14.8% (above 13% emergency floor); LONG/SHORT all 42-43% (in band)
+* (d) chop shifts: NO — chop UNCHANGED on both (17.85% / 18.84%); v2.64 invariant prediction confirmed
+* (e) shape/0-leak/NaN regression: NO — all clean ✓
+
+**Tier-(b) judgment factors for local-Claude lock decision:**
+1. **Floor breach magnitude is small**: SOL −0.46pp, LINK −0.25pp; both well above 13% hard-emergency floor. Spec §8.2 wording "quality target" not "hard constraint"; LightGBM tolerates 13-14% NEUTRAL natively.
+2. **Sample-density gain is modest**: ~420 NEUTRAL→directional reclassifications per asset (~1pp); marginal Phase 2 signal density boost.
+3. **Class balance better at 2.2**: LONG/SHORT distance from each other tightens (SOL: 1.07pp→1.08pp ~unchanged; LINK: 0.09pp→0.17pp slight worsening). Net: not materially improved.
+4. **Chop invariance held perfectly** — confirms tp/sl is independent of chop filter (both gates separable; future iteration of one variable won't disturb the other).
+5. **Alt-vol step response curve calibrated**: alts respond ~3.5× less aggressively than BTC to 0.1-step ATR tightening (alt: −0.50-0.51pp per 0.1; BTC: −1.80pp per 0.1). Implication: alt 2.2→2.0 would project NEUTRAL ~13.5% (right at emergency floor); alt 2.2→2.3 (relax) would project ~15.0% (right at target floor).
+6. **DR-012 candidates available** (per Decision v2.64 matrix tier (a)+(c)):
+  * (DR-012-revert) revert SOL/LINK to 2.4 → restore v2.62 PASS state (the known-good baseline; BTC stays at 2.4)
+  * (DR-012-relax-half-step) try SOL/LINK = 2.3 → projection NEUTRAL ~15.0-15.05%, just at floor edge; structurally similar to v2.62 but slightly tighter
+  * (DR-012-accept-tier-b) ACCEPT v2.64 as Phase 1.14 freeze state (per spec §8.2 "quality target" wording; LightGBM-tolerant; Phase 2 sample-density gain ~+1pp directional outweighs −0.5pp NEUTRAL band breach)
+  * (DR-012-extend-system) if v2.64 accepted, also retune BTC to 2.2 (system-wide consistency) — projection BTC NEUTRAL 24.03% → ~22.2% (still in band ✓; would give +0.5-1pp BTC directional density)
+
+**Phase 1.14 freeze blocker**: per Decision v2.64 line 197 "user assesses Phase 2 sample-density vs band-discipline trade-off after data lands" — this is now decision time for local-Claude. Three Phase 1.14 freeze candidates on the table:
+* **A. Revert (v2.62 baseline)**: BTC=2.4 + SOL=2.4 + LINK=2.4; all 3 PASS §8.2; safest; lose +1pp directional density on alts
+* **B. Accept v2.64**: BTC=2.4 + SOL=2.2 + LINK=2.2; alts borderline NEUTRAL 14.5-14.8% (band miss); +1pp directional density
+* **C. Extend v2.64 system-wide (DR-012)**: BTC=2.2 + SOL=2.2 + LINK=2.2; requires BTC re-run; consistent per-asset; ~+1pp directional density on all 3 assets; risk BTC NEUTRAL drops to ~22.2% (still in band)
+
+**Anti-patterns (§10.5.9)**: not used; banned phrases: none. **Per Decision v2.55 + v2.64 transition contract**: Phase 1.11 still pre-freeze; iteration freedom holds. **VPS standing by for local-Claude DR-012 lock decision** (revert / accept / extend) → freeze candidate selected → Phase 2.0 entry signal per §10.5.5 self-audit + §10.3.1 5-feature pre-gate.
