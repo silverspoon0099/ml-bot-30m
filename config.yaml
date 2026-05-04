@@ -97,17 +97,17 @@ features:
 # Labeling — triple-barrier (§8.1)
 # ────────────────────────────────────────────────────────────────────
 labeling:
-  method: triple_barrier_chop_filtered  # per Decisions v2.56 + v2.59
-  tp_atr_mult:      2.4              # DR-008: 2.5→2.4 per Decision v2.59 (incremental tighten)
+  method: triple_barrier_chop_filtered  # per Decisions v2.56 + v2.59 + v2.61
+  tp_atr_mult:      2.4              # UNCHANGED from v2.59 (DR-009 paused linear-ATR ladder)
   sl_atr_mult:      2.4              # symmetric
-  max_holding_bars: 8                # 8 × 30m = 4 hours
+  max_holding_bars: 12               # DR-009: 8→12 per Decision v2.61 (4hr → 6hr structural extension; cascades to walk_forward purge_bars + embargo_bars)
   min_profit_pct:                    # timeout-gate only (§8.1)
     BTC:  0.3                        # LOWERED 0.6→0.3 per DR-007
     SOL:  0.4                        # LOWERED 0.9→0.4 per DR-007
     LINK: 0.4                        # LOWERED 0.8→0.4 per DR-007
     # TAO/HYPE deferred per Decision v2.35
   min_atr_pct_threshold:             # CHOP FILTER (per DR-007 / Decision v2.56)
-    BTC:  0.25                       # DR-008: 0.20→0.25 per Decision v2.59 (more selective)
+    BTC:  0.275                      # DR-009: 0.25→0.275 per Decision v2.61 (incremental +0.025pp)
     SOL:  0.30                       # alts have higher base vol; chop floor wider
     LINK: 0.30
     # TAO/HYPE deferred per Decision v2.35
@@ -152,8 +152,8 @@ walk_forward:
   train_months: 9
   val_months:   1
   step_months:  1
-  purge_bars:   8                    # = max_holding_bars
-  embargo_bars: 8
+  purge_bars:   12                   # = max_holding_bars per §9.2 cascade contract (DR-009 8→12)
+  embargo_bars: 12                   # = max_holding_bars per §9.2 cascade contract (DR-009 8→12)
 
 # ────────────────────────────────────────────────────────────────────
 # Optuna tuning (§9.4)
