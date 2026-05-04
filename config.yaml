@@ -100,12 +100,12 @@ labeling:
   method: triple_barrier_chop_filtered  # per Decisions v2.56 + v2.59 + v2.61 + v2.64
   tp_atr_mult:                       # PER-ASSET dict (Decision v2.64 schema; values per v2.65 widening correction)
     BTC:  2.4                        # frozen at v2.61 PASS state — DO NOT perturb
-    SOL:  2.5                        # DR-012: 2.2→2.5 widening per Decision v2.65 (user-correction of v2.64 misjudgment direction)
-    LINK: 2.5                        # same as SOL initially
+    SOL:  2.7                        # VPS DR-013 candidate test (user 'test 2.7' 2026-05-04): widen 2.5→2.7 for buffer above NEUTRAL floor; pending local-Claude lock decision
+    LINK: 2.7                        # VPS DR-013 candidate test; pending local-Claude lock
   sl_atr_mult:                       # PER-ASSET dict (symmetric with tp)
     BTC:  2.4                        # frozen at v2.61 PASS
-    SOL:  2.5                        # DR-012: 2.2→2.5 widening per Decision v2.65
-    LINK: 2.5
+    SOL:  2.7                        # VPS DR-013 candidate test (symmetric sl)
+    LINK: 2.7                        # VPS DR-013 candidate test
   max_holding_bars: 12               # DR-009: 8→12 per Decision v2.61 (4hr → 6hr structural extension; cascades to walk_forward purge_bars + embargo_bars)
   min_profit_pct:                    # timeout-gate only (§8.1)
     BTC:  0.3                        # LOWERED 0.6→0.3 per DR-007

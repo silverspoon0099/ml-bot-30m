@@ -305,3 +305,49 @@ Canonical project name: `ml-bot-30m/` (VPS). Local working folder may still be `
 * If commit-now (Option-1): local-Claude signals DR-014 lock at v2.65 → Phase 2.0 entry per §10.5.5
 * If escalate (Option-2): local-Claude locks DR-013 at 2.7 → user pulls + VPS runs alts only at 2.7 → matrix re-evaluation
 * If revert (Option-3): local-Claude locks DR-014 at v2.62 baseline → Phase 2.0 entry
+2026-05-04 12:43  Phase 1.11 [VPS DR-013 candidate test per user 'now please test 2.7' 2026-05-04 + §10.5.6] SOL/USDT v2.66-candidate build (alts WIDEN further 2.5→2.7 — VPS executed config flip pending local-Claude formal lock decision; BTC frozen at 2.4) — **PASS all 11 checks ✓**, NEUTRAL margin +1.64pp above 15% floor. Runtime 1m 40s. Cascade audit ✓: config.yaml lines 103+104+107+108 flipped to 2.7 (annotated `VPS DR-013 candidate test; pending local-Claude lock`); BTC lines 102+106 unchanged at 2.4; lines 109-118 unchanged from v2.62; purge/embargo=12 unchanged. Builder log: `Triple-barrier labels: tp=2.7x, sl=2.7x, hold=12, min_profit_pct=0.4, min_atr_pct_threshold=0.6 (chop filter)` ✓ — `_resolve_per_asset()` correctly extracted SOL=2.7. (1)(2) shape (51158, 260) ✓. (3) feature count 250/250 ✓; 4 label cols ✓. (4) FILTERED SET (n=42,024 of 51,158): LONG 42.30% (in [35,45] ✓ −0.26pp vs v2.65) / SHORT 41.06% (in [35,45] ✓ −0.40pp vs v2.65) / **NEUTRAL 16.64% (in [15,25] ✓ +0.65pp vs v2.65 15.99%)**. Sentinels: CHOP_FILTERED 9,134 (rate 17.85% — UNCHANGED across full 4-point sweep 2.2/2.4/2.5/2.7 ✓ chop invariance robustness reaffirmed); UNLABELABLE 12 (0.02% ✓). v2.56 NEUTRAL>30 trigger NONE ✓. **Sample-density delta vs v2.65 (2.5)**: NEUTRAL 6,718→6,991 (+273); LONG 17,884→17,776 (−108); SHORT 17,422→17,257 (−165). Wider barriers → 273 directional bars reclassified to NEUTRAL. (5) NaN audit per v2.58+v2.60+v2.63 carveout: 0 outside carveout ✓. (6) 0-leak: 0 of 69 ✓. (7) HTF shift(1) ✓; Cat 22 sidecar 100% non-NaN on 5 active ✓; btc_funding_rate all-NaN placeholder ✓. (8) SOL_features.parquet 64.93 MB mtime 2026-05-04T12:43 UTC ✓. (9) Runtime 1m 40s wall (105s user, 1.8s sys). Anti-patterns (§10.5.9): not used; banned phrases: none. **Step-response sub-linearity observed**: v2.65 (2.5)→v2.66c (2.7) = +0.65pp NEUTRAL per +0.2 step = **+0.325pp/0.1 step** (vs symmetric ~+0.483pp at 2.2→2.5 range). Diminishing returns confirmed: at higher tp/sl, fewer marginal bars convert from directional to timeout-NEUTRAL because min_profit_pct gate already absorbs most candidates. Projection vs actual: SOL projected 16.96% / actual 16.64% / Δ−0.32pp (linear projection over-estimates).
+2026-05-04 12:45  Phase 1.11 [VPS DR-013 candidate test + §10.5.6] LINK/USDT v2.66-candidate build (alts WIDEN 2.5→2.7) — **PASS all 11 checks ✓**, NEUTRAL margin +1.89pp above 15% floor. Runtime 1m 40s. Cascade audit ✓ (same as SOL above; LINK=2.7 extracted from dict). Builder log: `tp=2.7x, sl=2.7x, hold=12, min_profit_pct=0.4, min_atr_pct_threshold=0.6 (chop filter)` ✓. (1)(2) shape (51158, 260) ✓. (3) 250/250 features ✓; 4 label cols ✓. (4) FILTERED SET (n=41,519 of 51,158): LONG 41.65% (in [35,45] ✓ −0.37pp vs v2.65) / SHORT 41.47% (in [35,45] ✓ −0.37pp vs v2.65) / **NEUTRAL 16.89% (in [15,25] ✓ +0.75pp vs v2.65 16.14%)**. Sentinels: CHOP_FILTERED 9,639 (rate 18.84% — UNCHANGED across 4-point sweep ✓); UNLABELABLE 12 (0.02% ✓). v2.56 trigger NONE ✓. **Sample-density delta vs v2.65**: NEUTRAL 6,703→7,011 (+308); LONG 17,445→17,292 (−153); SHORT 17,371→17,216 (−155) — near-symmetric reclassification. (5) NaN audit per v2.58+v2.60+v2.63: 0 outside carveout ✓. (6) 0-leak: 0 of 69 ✓. (7) HTF shift(1) ✓; Cat 22 sidecar 100% non-NaN on 5 active ✓. (8) LINK_features.parquet 61.93 MB mtime 2026-05-04T12:45 UTC ✓. (9) Runtime 1m 40s wall. Anti-patterns: not used. **Step-response (LINK)**: +0.75pp per +0.2 step = **+0.375pp/0.1 step** (vs +0.463pp at 2.2→2.5). Same diminishing-returns pattern as SOL. Projection vs actual: LINK projected 17.07% / actual 16.89% / Δ−0.18pp.
+2026-05-04 12:45  Phase 1.11 [VPS 4-point sweep complete — final escalation-ladder decision point for local-Claude / user] **Full SOL+LINK ATR-mult sweep table (4 data points across 2.2/2.4/2.5/2.7) + Phase 1.14 freeze candidate evaluation**:
+
+```
+| asset | metric    | v2.64 (2.2)  | v2.62 (2.4)  | v2.65 (2.5)  | v2.66c (2.7) | floor margin | LONG/SHORT density | gate     |
+|-------|-----------|--------------|--------------|--------------|--------------|--------------|--------------------|----------|
+| SOL   | LONG      | 43.27%       | 42.76%       | 42.56%       | 42.30%       | (in band)    | (decreases ~0.2pp/0.1 step) | ✓ all   |
+| SOL   | SHORT     | 42.19%       | 41.69%       | 41.46%       | 41.06%       | (in band)    | (same trend)               | ✓ all   |
+| SOL   | NEUTRAL   | 14.54% ✗    | 15.55% ✓    | 15.99% ✓    | **16.64% ✓** | −0.46/+0.55/+0.99/+1.64pp | (rises 0.5/0.44/0.65pp) | 2.4+ ✓ |
+| SOL   | chop-rate | 17.85%       | 17.85%       | 17.85%       | 17.85%       | (invariant — proven over 4-point sweep) | — | ✓ all   |
+| LINK  | LONG      | 42.54%       | 42.17%       | 42.02%       | 41.65%       | (in band)    | (decreases ~0.2pp/0.1 step) | ✓ all   |
+| LINK  | SHORT     | 42.71%       | 42.08%       | 41.84%       | 41.47%       | (in band)    | (same trend)               | ✓ all   |
+| LINK  | NEUTRAL   | 14.75% ✗    | 15.75% ✓    | 16.14% ✓    | **16.89% ✓** | −0.25/+0.75/+1.14/+1.89pp | (rises 1.00/0.39/0.75pp) | 2.4+ ✓ |
+| LINK  | chop-rate | 18.84%       | 18.84%       | 18.84%       | 18.84%       | (invariant — proven over 4-point sweep) | — | ✓ all   |
+| BTC   | (frozen at v2.61 PASS — not re-run; tp/sl=2.4 throughout)                                                                                       |
+```
+
+**Step-response calibration (full sweep)**:
+* SOL NEUTRAL/0.1 step: 0.51 (2.2→2.4) / 0.44 (2.4→2.5) / 0.33 (2.5→2.7) — DIMINISHING (sub-linear at high tp/sl)
+* LINK NEUTRAL/0.1 step: 0.50 / 0.39 / 0.38 — same diminishing pattern
+* Mechanism: at low tp/sl, most bars hit barriers within hold; at high tp/sl, min_profit_pct gate already absorbs most timeouts that would have widened to NEUTRAL.
+* LONG/SHORT density loss is near-LINEAR ~0.2pp per 0.1 step (no diminishing returns; widening monotonically reduces hits).
+* **Chop invariance proven over 4-point sweep** (full v2.64-v2.66c range): tp/sl entirely independent of chop filter. Future iterations can vary either gate independently without disturbing the other.
+
+**Phase 1.14 freeze candidate comparison (3 PASS-eligible options)**:
+```
+| candidate         | BTC | SOL | LINK | SOL N margin | LINK N margin | SOL L+S | LINK L+S | comment              |
+|-------------------|-----|-----|------|--------------|---------------|---------|----------|----------------------|
+| v2.62 (revert)    | 2.4 | 2.4 | 2.4  | +0.55pp     | +0.75pp       | 84.45   | 84.25    | already-PASSED baseline; minimum margin |
+| v2.65             | 2.4 | 2.5 | 2.5  | +0.99pp     | +1.14pp       | 84.02   | 83.86    | active locked v2.65; comfortable margin |
+| v2.66c (extend)   | 2.4 | 2.7 | 2.7  | +1.64pp     | +1.89pp       | 83.36   | 83.12    | maximum margin; smallest L+S density |
+```
+
+**Recommendation framing for local-Claude / user (4 factors, no preference imposed)**:
+1. **NEUTRAL floor margin**: v2.66c (1.64-1.89pp) > v2.65 (0.99-1.14pp) > v2.62 (0.55-0.75pp). Larger margin = more robust to data-distribution drift in OOT / live periods.
+2. **LONG/SHORT density**: v2.62 (84.25-84.45 combined) > v2.65 (83.86-84.02) > v2.66c (83.12-83.36). Spread across 3 candidates is small (~1.3pp at most); all comfortably in [35,45] per class.
+3. **Fee:edge ratio**: 2.7×ATR target = ~larger absolute % move per trade vs 2.5 / 2.4. Hyperliquid taker 3.5bps × 2-side = 7bps total fees + 2bps slip = 9bps round-trip. SOL/LINK ATR ≈ 0.5-1.0% per 30m bar; 2.7×ATR target ≈ 1.35-2.7% move; fee fraction = 9bps/200bps = 0.045 (4.5%). At 2.4×ATR target ≈ 1.2-2.4%; fee fraction 9/180=5%. Modest fee:edge improvement (~10-15% relative) at wider barriers.
+4. **Phase 2 model expressivity**: wider barriers = cleaner separable directional signal (true momentum captured); tighter barriers = more noise-driven signal. v2.66c likely yields strongest LightGBM AUC; v2.62 likely lowest. But wider barriers also = smaller sample of LONG/SHORT (~83.36 vs 84.45 = ~1.3% fewer directional samples in v2.66c) — minor in 51k-row dataset.
+
+**Anti-patterns (§10.5.9)**: not used; banned phrases: none. **Per Decision v2.55 + v2.65 transition contract**: Phase 1.11 still pre-freeze; iteration freedom holds. **Local config state**: config.yaml lines 103/104/107/108 currently at 2.7 (uncommitted) per VPS DR-013 candidate test; awaiting local-Claude lock decision for formal commit:
+* If local-Claude locks DR-013 at 2.7 → user pulls (config matches; spec edits arrive); commit current SOL/LINK parquets as 2.7 baseline → DR-014 freeze candidate
+* If local-Claude locks DR-014 at v2.65 (2.5) → revert config back to 2.5; rebuild SOL/LINK at 2.5 (already on disk if LINK_v265 still archived; otherwise rebuild = +3min); freeze
+* If local-Claude locks DR-014 at v2.62 (2.4) → revert config to 2.4; rebuild SOL/LINK at 2.4; freeze
+
+**Note for local-Claude**: SOL and LINK feature parquets currently on disk are the v2.66c (2.7) artifacts — NOT v2.65 (2.5). If freeze decision is v2.65 or v2.62, VPS will need to re-run alts at the chosen value. **VPS standing by for lock decision.**
