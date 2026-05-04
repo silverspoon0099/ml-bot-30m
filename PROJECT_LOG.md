@@ -518,3 +518,63 @@ Canonical project name: `ml-bot-30m/` (VPS). Local working folder may still be `
 * **§10.5 process discipline reminders**: VPS cites §10.3.1 + Decision v2.67 in PROJECT_LOG report; banned phrases prohibited; deviations require DR-NNN before action; OOT one-shot rule activates at Phase 2.10 boundary, NOT yet applicable.
 * **Compute estimate**: 14 folds × 5 features × 200 LightGBM rounds × ~30s/fold ≈ 5-10 min total. Single-fold first-attempt was 1.5min; full sweep at ~7min total is tractable.
 Standing by for VPS pull → execute walk-forward pre-gate → report
+2026-05-04 21:21  Phase 2.1 [SPEC §10.3.1 amended + Decision v2.67 + §10.5.6] BTC/USDT 5-feature WALK-FORWARD pre-gate — **FAIL**, mean_ratio = **1.0058** (gate ≤ 0.99 to PASS); robust signal absence across 25 folds. **Per Decision v2.67 explicit halt criterion fires**: walk-forward-mean failure is robust signal absence (not fold artifact); halt v2.0 with HIGH confidence. Runtime 25s wall (22min user across 25 folds). **Implementation**: scripts/baseline_gate.py extended with `walk_forward_pre_gate()` looping all available folds while `val_end ≤ oot_start`. Per-fold: 9mo train (purge -12 from tail) → 1mo val (embargo -12 from head) → fit LightGBM defaults → log_loss vs entropy-prior of val class distribution. Aggregate: mean_val_logloss / mean_prior; gate ≤ 0.99. **Fold-count note**: spec assumed "~14 folds" (legacy 2-year-data assumption); with current 3-year train+val data (2023-05 to 2026-02; 34 calendar months) and walk-forward step=1mo, the actual fold count is 25 (k=0..24). Reporting on all 25 — none cherry-picked or excluded. **Features (unchanged from v2.67 work order)**: ema21_dist_pct, rsi_14, adx, htf4h_ema21_pos, volume_ratio_20. **Cascade audit ✓**: config.yaml walk_forward block — train_months=9, val_months=1, step_months=1, purge_bars=12, embargo_bars=12 (matches §9.2 cascade for Phase 1.14 freeze max_holding_bars=12). oot_start=2026-03-01 boundary respected — no fold's val period crosses into OOT.
+
+**Aggregate metrics**:
+* n_folds: 25
+* mean_val_logloss: 1.070655
+* mean_prior (mean per-fold val entropy): 1.064532
+* **mean_ratio: 1.005752** (gate ≤ 0.99 to PASS; fails by 1.58pp)
+* median_ratio: 1.000672 (informational; near-prior typical)
+* **per-fold PASS count: 2 / 25** (8% of folds beat the 1% gate)
+* delta vs prior: **−0.58%** (model is 0.58% WORSE than constant-prior predictor on average)
+
+**Per-fold breakdown** (k, train→val window, n_train, n_val, best_iter, val_logloss, prior, ratio):
+
+```
+fold | window                 | n_train | n_val | best | logloss | prior  | ratio
+-----|------------------------|---------|-------|------|---------|--------|-------
+00   | 2023-05→2024-02        |  9,238  | 1,173 |  11  | 1.0813  | 1.0475 | 1.0322 ✗
+01   | 2023-06→2024-03        |  9,206  | 1,402 |  15  | 1.0596  | 1.0341 | 1.0247 ✗
+02   | 2023-07→2024-04        |  9,398  | 1,426 |  19  | 1.0707  | 1.0553 | 1.0146 ✗
+03   | 2023-08→2024-05        | 10,243  | 1,352 |  23  | 1.0574  | 1.0691 | 0.9891 ✓ best
+04   | 2023-09→2024-06        | 11,037  |   975 |  11  | 1.0743  | 1.0857 | 0.9895 ✓
+05   | 2023-10→2024-07        | 11,312  | 1,450 |   1  | 1.0495  | 1.0418 | 1.0074 ✗
+06   | 2023-11→2024-08        | 11,732  | 1,419 |   1  | 1.0629  | 1.0604 | 1.0023 ✗
+07   | 2023-12→2024-09        | 11,956  | 1,223 |  17  | 1.0514  | 1.0545 | 0.9971 ✗ near
+08   | 2024-01→2024-10        | 11,889  | 1,195 |  16  | 1.0603  | 1.0683 | 0.9925 ✗ near
+09   | 2024-02→2024-11        | 11,711  | 1,361 |  20  | 1.0413  | 1.0499 | 0.9918 ✗ near
+10   | 2024-03→2024-12        | 11,899  | 1,435 |  16  | 1.0476  | 1.0555 | 0.9925 ✗ near
+11   | 2024-04→2025-01        | 11,932  | 1,281 |  10  | 1.0464  | 1.0492 | 0.9973 ✗
+12   | 2024-05→2025-02        | 11,787  | 1,096 |  14  | 1.0733  | 1.0727 | 1.0006 ✗
+13   | 2024-06→2025-03        | 11,531  | 1,356 |   1  | 1.0464  | 1.0413 | 1.0049 ✗
+14   | 2024-07→2025-04        | 11,912  | 1,211 |  14  | 1.0608  | 1.0609 | 1.0000 ✗
+15   | 2024-08→2025-05        | 11,673  | 1,257 |   5  | 1.0800  | 1.0776 | 1.0023 ✗
+16   | 2024-09→2025-06        | 11,511  |   881 |  22  | 1.0991  | 1.0919 | 1.0065 ✗
+17   | 2024-10→2025-07        | 11,169  |   859 |   9  | 1.0858  | 1.0869 | 0.9990 ✗ near
+18   | 2024-11→2025-08        | 10,833  |   958 |   1  | 1.1120  | 1.0902 | 1.0200 ✗
+19   | 2024-12→2025-09        | 10,430  |   648 |  13  | 1.1499  | 1.0908 | 1.0542 ✗ worst
+20   | 2025-01→2025-10        |  9,643  | 1,292 |   2  | 1.0860  | 1.0854 | 1.0005 ✗
+21   | 2025-02→2025-11        |  9,654  | 1,316 |   5  | 1.0574  | 1.0468 | 1.0101 ✗
+22   | 2025-03→2025-12        |  9,874  | 1,159 |   6  | 1.0904  | 1.0897 | 1.0007 ✗
+23   | 2025-04→2026-01        |  9,677  | 1,045 |   7  | 1.0821  | 1.0845 | 0.9978 ✗ near
+24   | 2025-05→2026-02        |  9,511  | 1,294 |  21  | 1.0405  | 1.0234 | 1.0168 ✗
+```
+
+**Diagnostic observations** (descriptive, not authorizing any action):
+* **Tight clustering near prior**: 19 of 25 folds (76%) have ratio in [0.99, 1.02]. Model performs essentially at-prior with minor noise.
+* **Early-stopping pattern**: 5 folds stopped at best_iteration ≤ 2 (folds 05, 06, 13, 18, 20). LightGBM detected zero generalizing signal in those windows past the first 1-2 trees. Even folds with best_iteration in mid-teens typically only converge slightly past prior.
+* **Best fold (03) only at 0.9891**: even the strongest result is 1.09pp better than prior — barely above the 1% gate threshold and well below what "real signal" looks like (would expect ratio ≤ 0.95-0.97).
+* **Worst fold (19) at 1.0542**: val period 2025-09 had high prior (1.0908 — near-uniform classes); model still failed materially despite balanced regime.
+* **Decision v2.67 prediction confirmed**: original first-fold failure (ratio 1.0322) was indeed near the upper end of the distribution but NOT an outlier — fold 19 is worse, fold 01 is comparable. The 25-fold mean (1.0058) shows the regime-shift artifact at fold 00 is partially compensated by other folds, but does NOT push aggregate below the gate. **Walk-forward methodology correction was correct (eliminated the fold-selection question), but the underlying premise still fails the gate.**
+
+**§10.3.1 spec halt quote (per Decision v2.67 amendment)**: "walk-forward-mean failure is robust signal absence (not fold artifact); halt v2.0 with HIGH confidence and escalate via fresh DR re-opening §8 labeling, Phase 1.10 feature engineering, or accepting v2.0 as a research dead-end."
+
+**Decision matrix paths surfaced for local-Claude / user (per §10.3.1 amended halt-escalation routes; VPS not authorized to choose)**:
+1. **DR re-opening §8 labeling**: re-examine triple-barrier params. Per Decision v2.66 fallbacks (v2.65 alts=2.5; v2.62 alts=2.4) already characterized; or fresh exploration of min_profit_pct, max_holding_bars, ATR-period, label class definitions. Note current freeze (BTC tp/sl=2.4) was empirically best of BTC iteration ladder.
+2. **DR re-opening Phase 1.10 feature engineering**: 5-feature pre-gate is intentionally minimal. Spec §10.3.1 explicitly states "if a tiny hand-picked feature set cannot beat the empirical prior, the signal space is noise-dominated and adding 195 more features will not rescue it." Per this premise check, signal absence at 5 features predicts signal absence at 250.
+3. **DR re-opening timeframe**: pivot from 30m to 1H or 4H. Spec is 30m-locked per Decision v2.28; reverting requires acknowledging full Phase 1 re-build cycle.
+4. **DR accepting v2.0 as research dead-end**: BTC/SOL/LINK at 30m with current label scheme has no extractable edge findable by tree-ensemble methods. Pivot to different asset class, model class (sequence, transformer), or objective (ranking, regression on holding-period returns).
+5. **DR-015 candidate (per Decision v2.67 (a) branch)**: amend §10.3.2 to walk-forward methodology AND run the full-feature gate as a sanity check before committing to options 1-4. Spec §10.3.1 prohibits this in letter; spirit-vs-letter call belongs to local-Claude.
+
+**Anti-patterns (§10.5.9)**: not used; banned phrases: none. **Per spec §10.3.1 amended**: VPS HALTS at this gate. **Code change**: scripts/baseline_gate.py extended with walk_forward_pre_gate (~90 added lines); now reads walk_forward + splits sections of config.yaml. **Persisted artifact**: scripts/baseline_gate.py uncommitted. **VPS standing by for local-Claude / user halt-decision per §10.3.1 amended escalation routes** — 5 paths surfaced; awaiting fresh DR authorization.
