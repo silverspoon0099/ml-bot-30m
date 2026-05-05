@@ -619,3 +619,85 @@ Standing by for VPS pull → execute §10.3.2 amended walk-forward → report
 * **§10.5 process discipline reminders**: VPS cites §10.3.2 + Decisions v2.68 + v2.69 in PROJECT_LOG report; banned phrases prohibited; deviations require DR-NNN before action; OOT one-shot rule activates at Phase 2.10 boundary, NOT yet applicable (current iteration on pre-OOT data only).
 * **Iteration freedom EXPLICITLY closed at this gate** — §10.3.x methodology iteration is final (walk-forward + multi-asset is canonical); after this result lands, the next legitimate action is Phase 2.3 (outcome a), tiered-universe pivot via DR-017 (outcome b), v2.0 halt + escalation DR (outcome c), or alt-specific investigation (outcome d). No further methodology adjustment without fresh DR.
 Standing by for VPS pull → execute multi-asset §10.3.2 → 3-asset report → 4-tier matrix evaluation
+2026-05-05 00:34  Phase 2.2 [SPEC §10.3.2 amended + Decision v2.68 + v2.69 + §10.5.6] **MULTI-ASSET FULL-FEATURE WALK-FORWARD GATE — ALL 3 FAIL → tier (c) HALT**, mean_ratio gate ≤ 0.98 missed by all 3 assets. Per Decision v2.69 4-tier matrix locked upfront: tier-(c) action = HALT v2.0 with very high confidence; NO further "one more test". Runtime 4m 45s wall (253min user across 75 LightGBM fits). **Implementation**: scripts/baseline_gate.py extended with `--stage full` (multi-asset loop + feature_columns helper + collect_importance support in walk_forward_gate; ~120 added lines beyond Decision v2.67 walk-forward scaffolding). **Cascade audit ✓**: same walk-forward block as Phase 2.1 (train=9mo / val=1mo / step=1mo / purge=12 / embargo=12); feature counts BTC=243, SOL=250, LINK=250 match Phase 1.14 freeze; oot_start=2026-03-01 boundary respected on all 75 fold runs.
+
+**Cross-asset aggregate table**:
+```
+| asset | n_folds | mean_logloss | mean_prior  | mean_ratio | PASS_folds | delta   | gate ≤ 0.98 |
+|-------|---------|--------------|-------------|------------|------------|---------|--------------|
+| BTC   |   25    | 1.055284     | 1.064532    | 0.991313   |   6/25     | +0.87%  | FAIL by 1.13pp |
+| SOL   |   25    | 1.027448     | 1.024697    | 1.002685   |   0/25     | −0.27%  | FAIL (worse than prior) |
+| LINK  |   25    | 1.025598     | 1.021389    | 1.004121   |   0/25     | −0.41%  | FAIL (worse than prior) |
+```
+
+**Decision v2.69's diagnostic hypothesis test result**: the §10.3.1 5-feature → §10.3.2 full-feature inference was DR-015's target. Outcome:
+* BTC: 5-feature pre-gate ratio 1.006 → 243-feature gate 0.991 (+1.45pp gain). **Spec's "if 5 fail, 245 will too" inference is FALSE for BTC** — extra features extracted real signal. But +1.45pp gain still leaves 1.13pp short of 0.98 gate.
+* SOL: 250-feature gate 1.003 (worse than prior). Full features did NOT extract net signal on SOL.
+* LINK: 250-feature gate 1.004 (worse than prior). Same as SOL — no net signal extraction.
+* **Verdict**: BTC partial confirmation + alt full disconfirmation. Hypothesis was directionally correct (5-feature heuristic indeed crypto-miscalibrated for BTC), but quantitatively insufficient (full features don't reach 0.98 gate).
+
+**Per-fold breakdown — BTC** (6 PASS):
+```
+fold | val window      | best | logloss | prior  | ratio  | gate
+-----|-----------------|------|---------|--------|--------|------
+00   | 2024-02→2024-03 |  10  | 1.0784  | 1.0475 | 1.0295 | ✗
+01   | 2024-03→2024-04 |  17  | 1.0496  | 1.0341 | 1.0150 | ✗
+02   | 2024-04→2024-05 |  15  | 1.0652  | 1.0553 | 1.0094 | ✗
+03   | 2024-05→2024-06 |  83  | 1.0316  | 1.0691 | 0.9650 | ✓
+04   | 2024-06→2024-07 |   4  | 1.0828  | 1.0857 | 0.9973 | ✗
+05   | 2024-07→2024-08 |   1  | 1.0498  | 1.0418 | 1.0077 | ✗
+06   | 2024-08→2024-09 |  10  | 1.0405  | 1.0604 | 0.9812 | ✗ near
+07   | 2024-09→2024-10 |  60  | 1.0250  | 1.0545 | 0.9720 | ✓
+08   | 2024-10→2024-11 |  66  | 0.9837  | 1.0683 | 0.9208 | ✓ best (−7.92%)
+09   | 2024-11→2024-12 |  11  | 1.0459  | 1.0499 | 0.9962 | ✗
+10   | 2024-12→2025-01 |  41  | 1.0231  | 1.0555 | 0.9693 | ✓
+11   | 2025-01→2025-02 |  26  | 1.0142  | 1.0492 | 0.9666 | ✓
+12   | 2025-02→2025-03 |  11  | 1.0546  | 1.0727 | 0.9831 | ✗
+13   | 2025-03→2025-04 |  15  | 1.0192  | 1.0413 | 0.9788 | ✗ near
+14   | 2025-04→2025-05 |  31  | 1.0548  | 1.0609 | 0.9943 | ✗
+15   | 2025-05→2025-06 |  17  | 1.0681  | 1.0776 | 0.9912 | ✗
+16   | 2025-06→2025-07 |  25  | 1.0889  | 1.0919 | 0.9972 | ✗
+17   | 2025-07→2025-08 |   7  | 1.0863  | 1.0869 | 0.9995 | ✗
+18   | 2025-08→2025-09 |  15  | 1.0962  | 1.0902 | 1.0055 | ✗
+19   | 2025-09→2025-10 |  19  | 1.1100  | 1.0908 | 1.0175 | ✗
+20   | 2025-10→2025-11 |   4  | 1.0835  | 1.0854 | 0.9982 | ✗
+21   | 2025-11→2025-12 |  21  | 1.0421  | 1.0468 | 0.9956 | ✗
+22   | 2025-12→2026-01 |  50  | 1.0732  | 1.0897 | 0.9848 | ✗ near
+23   | 2026-01→2026-02 |   8  | 1.0761  | 1.0845 | 0.9923 | ✗
+24   | 2026-02→2026-03 |  28  | 1.0395  | 1.0234 | 1.0158 | ✗
+```
+
+**Per-fold breakdown — SOL** (0 PASS): mean ratio 1.0027; 8 folds in [0.99, 1.00); 17 folds at-or-above 1.00. Best fold 00 (2024-02 val) ratio=0.9873 — barely sub-prior, doesn't clear 0.98 gate. Worst fold 12 (2025-02 val) ratio=1.0256.
+
+**Per-fold breakdown — LINK** (0 PASS): mean ratio 1.0041; 7 folds sub-prior (best fold 21 (2025-11 val) ratio=0.9839); 18 folds at-or-above 1.00. Worst fold 23 (2026-01 val) ratio=1.0273.
+
+**Top-20 feature importance per asset (aggregated gain across all 25 folds; informational)**:
+* **[BTC]**: 1. hour_of_day_cos (4.28%), 2. day_of_week_sin (4.09%), 3. last_rsi_extreme_depth (2.06%), 4. htf4h_adx (1.96%), 5. bars_since_adx_weak_start (1.83%), 6. htf4h_macd_hist (1.75%), 7. htf1d_atr_pct (1.72%), 8. htf4h_atr_ratio (1.72%), 9. bars_since_wt_os (1.66%), 10. bars_since_rsi_ob (1.66%), 11. bars_since_wt_ob (1.65%), 12. hurst_exponent (1.56%), 13. bars_since_rsi_os (1.52%), 14. weekly_pivot_R3_dist_pct (1.41%), 15. bars_since_pivot_touch_weekly (1.38%), 16. autocorr_1 (1.34%), 17. bars_since_adx_trend_start (1.34%), 18. htf1d_return_1bar (1.34%), 19. weekly_pivot_S3_dist_pct (1.32%), 20. bars_since_volume_spike (1.28%). **Diagnostic note**: BTC top-2 are calendar features — model substantially fits temporal regularities (hour-of-day / day-of-week effects) rather than market-state directional signal.
+* **[SOL]**: 1. htf4h_adx (2.84%), 2. bars_since_wt_os (2.30%), 3. last_rsi_extreme_depth (1.81%), 4. day_of_week_sin (1.77%), 5. bars_since_rsi_ob (1.72%), 6. bars_since_adx_weak_start (1.62%), 7. bars_since_pivot_touch_weekly (1.60%), 8. atr_14 (1.58%), 9. htf1d_atr_pct (1.57%), 10. htf1d_ema200_pos (1.52%). HTF + event-memory dominate; calendar less prominent than BTC.
+* **[LINK]**: 1. bars_since_pivot_touch_weekly (2.37%), 2. bars_since_rsi_ob (2.36%), 3. bars_since_volume_spike (2.34%), 4. htf4h_adx (2.29%), 5. bars_since_wt_os (2.28%), 6. bars_since_rsi_os (2.02%), 7. bars_since_wt_ob (1.91%), 8. bars_since_adx_weak_start (1.77%), 9. htf4h_atr_ratio (1.75%), 10. last_rsi_extreme_depth (1.68%). pivot + event-memory cluster strongest.
+* **Cross-asset commonality**: bars_since_* event-memory features + HTF context dominate all 3 assets. **None of §10.3.1 5-feature heuristic picks (ema21_dist_pct, rsi_14, adx, htf4h_ema21_pos, volume_ratio_20) appear in any top-20** — quantitative confirmation that the spec's heuristic 5-feature list was crypto-miscalibrated.
+
+**4-tier decision matrix outcome (per Decision v2.69 locked-upfront, NOT iterable)**:
+* (a) all 3 PASS: NO — none cleared 0.98
+* (b) BTC fail + ≥1 alt pass: NO — alts also failed
+* **(c) ALL 3 FAIL**: **YES → HALT v2.0 with VERY HIGH CONFIDENCE; fresh DR for major rework**
+* (d) BTC pass + ≥1 alt fail: NO
+
+**Decision v2.69 explicit halt-criterion text**: "(c) ALL 3 FAIL → HALT v2.0 with very high confidence; NO further 'one more test'; fresh DR for major rework. (Critical commitment locked: 'No further one more test' if all 3 fail — prevents v1.0 tuning-into-noise mode.)"
+
+**Per spec §10.3.2 + Decision v2.69**: VPS HALTS at this gate. The "no more one more test" commitment is locked; VPS will NOT propose further iteration. Path forward requires a fresh DR from local-Claude / user authorizing a major rework category. Per spec §10.3.1 amendment + Decision v2.67/v2.69, escalation routes are:
+
+1. **Re-open §8 labeling fundamentals** — DR re-examining triple-barrier as the labeling paradigm, or relaxing label-class definitions (binary directional, 4-class with pullback, regression on holding-period returns instead of classification).
+2. **Re-open Phase 1.10 feature engineering** — top-20 importances above suggest event-memory + HTF context carry the most signal; categories like Cat 1 momentum_core, Cat 12 lagged dynamics may be net-noise. SHAP-trim (Phase 2.6) would have isolated this; spec dependency forbids running 2.6 after a 2.2 fail.
+3. **Re-open timeframe** — pivot 30m → 1H/4H. Spec 30m-locked per Decision v2.28; full Phase 1 re-build.
+4. **Re-open model-class** — pivot from LightGBM 3-class to alternatives (sequence models, quantile regression on returns, MetaLabeling per López de Prado).
+5. **Accept v2.0 as research dead-end** — formal acknowledgment that BTC/SOL/LINK at 30m with current architecture has no extractable edge findable by standard supervised learning.
+
+VPS does NOT recommend among these — fresh DR required.
+
+**Anti-patterns (§10.5.9)**: not used; banned phrases: none. **Notable artifacts on disk** (informational; available for future DR analysis without re-run):
+* `/tmp/phase_2_2_full_gate.log` (full multi-asset run log; 75 fold-runs + 3 importance tables)
+* Frozen feature parquets at `data/storage/features/{BTC,SOL,LINK}_features.parquet` (Phase 1.14 freeze; do NOT regenerate)
+* `scripts/baseline_gate.py` (extended; uncommitted) — supports both `--stage pre` and `--stage full` for any future DR-authorized re-run
+
+**VPS standing by for local-Claude / user fresh DR per Decision v2.69 tier-(c) escalation**. Per the locked "no more one more test" commitment, VPS will NOT execute further gate variation, fold-selection adjustment, hyperparameter sweep, or feature-list edit absent fresh DR + explicit unfreeze authorization.
